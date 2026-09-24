@@ -5,7 +5,7 @@
 ## 状态
 
 - 设计规格：[docs/superpowers/specs/2026-09-24-dsh-pet-desktop-design.md](docs/superpowers/specs/2026-09-24-dsh-pet-desktop-design.md)
-- 基座代码：`dsh-pet-main/`（上游 zip 快照，改造遵循"上游文件能不改就不改"原则）
+- 基座代码：`dsh-pet/`（上游 zip 快照，改造遵循"上游文件能不改就不改"原则）
 
 ## 许可与署名
 

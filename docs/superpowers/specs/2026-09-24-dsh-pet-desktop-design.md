@@ -2,7 +2,7 @@
 
 - 日期：2026-09-24
 - 状态：已获用户批准（对话确认）
-- 基座项目：[dsh-pet](https://github.com/PC2005-cloud/dsh-pet)（本地副本 `dsh-pet-main/`，MIT 代码 + 素材禁商用 + 二创须署名）
+- 基座项目：[dsh-pet](https://github.com/PC2005-cloud/dsh-pet)（本地副本 `dsh-pet/`，MIT 代码 + 素材禁商用 + 二创须署名）
 
 ## 1. 背景与目标
 
@@ -115,7 +115,7 @@ dsh-pet/
 
 ## 9. 实施注意事项
 
-- 本地 `dsh-pet-main/` 是 zip 解压、无 git 历史；实施前建议改为 `git clone` 上游并把本地改动做成独立 commit 序列，便于日后同步上游
+- 本地基座代码是上游 zip 解压快照（已改名 `dsh-pet/`并入库本仓库）；后续所有改动以独立 commit 叠加在快照点上，同步上游用 `git remote add upstream` + merge 方案
 - `lib/` 为构建产物（`npm run prepare` 产出，含 shared-core.js），迷你宿主 require 编译产物而非 TS 源码
 - Electron 首次由 `npm run ensure:electron` 拉取到 `~/.dsh/electron/`；打包路径需改为随应用分发内嵌 Electron
 - Windows  Defender/SmartScreen 对未签名 exe 会告警，文档中向用户说明即可（不买证书）

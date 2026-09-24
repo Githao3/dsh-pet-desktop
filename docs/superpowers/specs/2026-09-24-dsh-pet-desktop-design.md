@@ -24,7 +24,7 @@
 改造后：electron-helper ──HTTP──▶ 同进程内嵌"迷你宿主"（本地 127.0.0.1 随机端口）
 ```
 
-核心决策：**渲染端（sprite.js / renderer.js / events.js / shared-core）零改动**。渲染端本就支持"非 bridge 直连 HTTP"模式（`DSH_PET_BRIDGE` 未设时按 configUrl 直连），迷你宿主利用这一点：
+核心决策：**渲染端（sprite.js / renderer.js / events.js / shared-core）零改动**（唯一例外为 §2.2 明示的一处 noLlm 菜单补丁）。渲染端本就支持"非 bridge 直连 HTTP"模式（`DSH_PET_BRIDGE` 未设时按 configUrl 直连），迷你宿主利用这一点：
 
 - Electron 主进程 `app.whenReady` 后启动 Node `http` 服务，监听 `127.0.0.1:0`（随机端口）
 - 路由前缀保持 `/dsh-pet-7340/`，实现直接复用插件编译产物 `lib/` 中的 `handlePetRoute` / `readAllConfig`
@@ -37,7 +37,7 @@
 |----|------|------|
 | `dsh-home-paths` | 解析 `$DSH_HOME` | 垫片：返回 `~/.dsh`（与 DSH 用户完全同路径，pet pack / main-config 文档全部照用） |
 | `dsh-credentials` | 取 API key | 垫片：第一阶段一律返回"无凭据"；第二、三阶段读应用本地设置文件 |
-| `dsh-llm` | 碎碎念/对话调模型 | 第一阶段不引入：路由层保证 `/whisper`、`/chat` 不会被前端触达（见 3.2）；第二阶段以 OpenAI 兼容 HTTP 客户端实现同名接口 |
+| `dsh-llm` | 碎碎念/对话调模型 | 第一阶段不引入：菜单入口被 `noLlm` 补丁隐藏（见 2.2/3.2），即便端点被触达也返回 501、前端静默回落；第二阶段以 OpenAI 兼容 HTTP 客户端实现同名接口 |
 
 **实施风险与后备方案**：若 `lib/host` 的路由代码与 DSH 运行时耦合超出这三个包（如实例化期订阅 DSH 事件总线），则退化为"在迷你宿主内按响应形状重写薄实现"——`/config` 直接调 `src/host/config.ts` 的 `readAllConfig`（该文件零外部依赖，纯 node:fs/path），`/thumb` 为静态文件服务，其余端点返回无害空值。两方案对渲染端表现一致。
 
@@ -52,10 +52,11 @@ dsh-pet/
 │   └── start-standalone.mjs      # 新增：开发流一键启动（复用 start-desktop 的 Electron 探测逻辑）
 ├── assets/config.jsonc           # 不改动（上游文件保持原样）
 └── package.json                  # 修改：加 start:standalone 脚本 + electron-builder devDependency
-desktop/standalone-settings.json  # 新增（应用数据目录内）：LLM 配置占位（本期只读不写 UI）
 ```
 
-原则：**上游文件能不改就不改，功能全部落在新增文件里**，未来 rebase 上游成本最低。
+**唯一一处渲染端补丁（明示的本地偏差）**：`runtime/electron-helper/sprite.js` 菜单注入处（约 L1026-1033，「碎碎念/对话」上游是无条件显示的），当窗口 URL 带 `noLlm=1` 查询参数（由 main.js 在独立模式下注入）时跳过这两项。「查看余额」无需补丁——上游本就按 `balanceEnabled` 门控。此补丁在上游更新时可能需手工重放，故控制在最小一处。
+
+原则：**上游文件能不改就不改，功能全部落在新增文件里**（唯一例外即上述 noLlm 补丁），未来 rebase 上游成本最低。
 
 ## 3. 功能取舍（第一阶段）
 
@@ -68,12 +69,14 @@ desktop/standalone-settings.json  # 新增（应用数据目录内）：LLM 配�
 | 组 | 数量 | 第一阶段处理 | 后续复活条件 |
 |----|------|-------------|-------------|
 | 余额动画 | 6 | `pets[0].balanceEnabled` 覆盖为 false，右键"查看余额"自动隐藏 | 设置里配 API key 后开启 |
-| 碎碎念动画 | 3 | `whisperEnabled:false`（本就是包默认）；`/whisper` 返回空 | 第二阶段接 LLM 自动复活 |
+| 碎碎念动画 | 3 | `whisperEnabled:false`（本就是包默认）；`/whisper` 返回 501；菜单入口隐藏（noLlm 补丁） | 第二阶段接 LLM 自动复活 |
 | 工作状态动画 | 6 | 无 DSH 事件源，`/work-status` 恒返回 `{ts:0}` | agent 场景：向迷你宿主 POST 会话状态即可复活 |
 | DSH 会话监听 | — | 移除（不是动画，是事件源） | — |
 | 系统通知 | — | 保留代码，无事件源故实际不弹 | 随 LLM/agent 接入获得事件源 |
 
-右键菜单差异：「碎碎念」「对话」「查看余额」三项隐藏，其余全部保留。
+右键菜单差异：「碎碎念」「对话」两项由 noLlm 补丁隐藏，「查看余额」由既有 `balanceEnabled:false` 门控自动隐藏；其余（动作树/打开网站/回到初始位置）全部保留。
+
+**补充（不矛盾的彩蛋）**：「动作」子树里上游会列出「余额档位/碎碎念/工作状态」分类（buildMenuTree 把 events 池也平铺进菜单）——这 15 段动画**仍可右键手动点播预览**，因为点播只是本地播 webm，不需要事件源。"不触发"指的是事件自动触发，素材本身随时可看。
 
 **覆盖方式**：迷你宿主读配置时在用户层注入默认覆盖（等价于往 `~/.dsh/dsh-pet/main-config.json` 写 `balanceEnabled:false`），不改包内 config.jsonc。用户在配置目录手写 `main-config.json` 时以用户文件为准（沿用上游覆盖语义）。
 
@@ -91,7 +94,7 @@ desktop/standalone-settings.json  # 新增（应用数据目录内）：LLM 配�
 
 ## 6. 第二阶段预览（LLM 插槽，本期不实现）
 
-- `desktop/standalone-settings.json`：`{ "llm": { "apiBase", "apiKey", "model", "enabled" } }`，任何 OpenAI 兼容服务（DeepSeek 官方 API / Kimi / 本地 ollama）
+- `~/.dsh/dsh-pet/standalone-settings.json`：`{ "llm": { "apiBase", "apiKey", "model", "enabled" } }`，任何 OpenAI 兼容服务（DeepSeek 官方 API / Kimi / 本地 ollama）；LLM 启用后 main.js 不再注入 `noLlm=1`，菜单两项自动回归
 - 实现 `dsh-llm` 垫片的真实版本 → 碎碎念、对话、配图表情包全部按上游既有流程复活
 - agent 状态可视化：暴露 `POST /dsh-pet-7340/work-status`（本机），任何外部程序（未来用户的 agent 主程序）推送 `{level}` 即驱动 6 段工作状态动画
 - 该阶段只动迷你宿主与设置读写，渲染端依旧零改动

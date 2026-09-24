@@ -1,0 +1,28 @@
+# 依赖与构建产物
+node_modules/
+lib/
+dist/
+*.tsbuildinfo
+
+# 素材链中间产物（上游脚本生成）
+step01/
+step02/
+step03/
+step04/
+pr/
+prproj/
+.tools/
+
+# 源视频（大文件，按需走 GitHub Releases / git-lfs）
+video/*.mp4
+
+# Electron 下载缓存与打包产物
+dsh-pet-desktop-*.exe
+*.blockmap
+electron-builder-cache/
+
+# 系统与编辑器
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/

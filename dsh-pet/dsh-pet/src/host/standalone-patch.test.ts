@@ -118,3 +118,31 @@ describe('守卫：sprite.js 的 noLlm 消费走全局 params（Task 5 评审遗
     assert.match(line, /=\s*NO_LLM/, '挂的必须是 NO_LLM 本身');
   });
 });
+
+describe('start-standalone launcher', () => {
+  // 启动器不经 tsc、Electron 没起来时什么断言都做不了——只能读源码钉结构（同本文件其余守卫）。
+  // 一律「语义断言」：断某行/某形态存在或不存在，不看字符距离（禁止 [\s\S]{0,N}? 距离预算）。
+  const launcher = readSource('../../scripts/start-standalone.mjs');
+
+  test('必须删键而非设空串：劫持/外部宿主/冒烟变量都从 env 里 delete（issue #63 同 start-desktop）', () => {
+    // delete env.X 的「删键」语义是硬要求（实测设空串会让 Electron 直接 abort）：
+    // 逐条钉 delete 语句在位，写法（换行/注释）怎么变都不敏感
+    for (const key of ['ELECTRON_RUN_AS_NODE', 'DSH_PET_CONFIG_URL', 'DSH_PET_HOST_PID', 'DSH_PET_SMOKE']) {
+      assert.match(launcher, new RegExp(`delete\\s+env\\.${key}\\b`), `必须 delete env.${key}`);
+    }
+  });
+
+  test("独立模式总闸由启动器注入：env 里设 DSH_PET_STANDALONE: '1'", () => {
+    assert.match(launcher, /DSH_PET_STANDALONE\s*:\s*'1'/, "必须以对象字面量设 DSH_PET_STANDALONE: '1'");
+  });
+
+  test('负向：不得把 DSH_PET_HOST_PID 写成 env 赋值形态（防重新引入 host-pid 注入）', () => {
+    // delete env.DSH_PET_HOST_PID 里 token 后随分号，命中不了 /DSH_PET_HOST_PID\s*:/；
+    // 只有 `DSH_PET_HOST_PID: <值>` 这种注入形态才会命中——正是「桌宠独立存活、托盘才是出口」要禁的
+    assert.doesNotMatch(launcher, /DSH_PET_HOST_PID\s*:/, 'start-standalone 不得注入 DSH_PET_HOST_PID');
+  });
+
+  test('前置检查在位：standalone-core.cjs 必须先构建才启动（缺失即报错退出，不静默半死）', () => {
+    assert.match(launcher, /standalone-core\.cjs/, '必须前置校验 standalone-core.cjs 是否已构建');
+  });
+});

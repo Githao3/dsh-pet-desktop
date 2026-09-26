@@ -13,11 +13,19 @@ directories:
 extraMetadata:
   main: runtime/electron-helper/main.js
 asar: false # helper 体系按纯目录设计（loadFile 子资源、nativeImage 路径），关 asar 保行为一致
-# 包里的 app 目录只有 runtime/electron-helper（node_modules 不入包），没有原生依赖；
-# 关掉 electron-builder 默认会跑的 @electron/rebuild，打包过程不再碰 npm（国内网络策略）。
+# 生产依赖（@electron/get、@electron-internal/extract-zip）会进包（resources/app/node_modules），
+# 但 extract-zip 的原生模块是预编译 N-API .node（index.win32-x64-msvc.node 等，按运行时自行解析），
+# N-API 是 ABI 稳定契约，不需要针对 Electron 的 V8/Node header 重新编译 → 关掉 electron-builder
+# 默认会跑的 @electron/rebuild 是安全的，打包过程也不再碰 npm（国内网络策略）。
 npmRebuild: false
+# 无更新服务端：不提供发布通道，electron-builder 就不该生成 latest.yml / app-update.yml ——
+# 否则装出来的 app 会去按一个不存在的 GitHub release 检查更新（实测 latest.yml 里的文件名
+# 与实际产物名都不一致），纯属误导。显式置 null 关掉自动更新元数据。
+publish: null
 files:
   - runtime/electron-helper/**
+  # 测试文件不入生产包（mini-host.test.js 是 npm test:standalone 用的，运行时会引入 node:test）
+  - '!runtime/electron-helper/*.test.js'
   - package.json
 extraResources:
   # 素材/配置以"包"形态随附：main.js 打包态取 resources/dsh-pet-package

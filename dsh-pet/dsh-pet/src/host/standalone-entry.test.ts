@@ -114,6 +114,10 @@ describe('desktopPetList', () => {
       .sort();
     assert.deepEqual(ids, ['main', 'pig1']);
   });
+
+  test('包内默认配置缺失 → 异常上抛（安装损坏不静默兜底）', () => {
+    assert.throws(() => desktopPetList(tmp(), tmp()), /内置默认配置缺失或解析失败/);
+  });
 });
 
 describe('ensureStarterUserConfig', () => {

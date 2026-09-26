@@ -3,9 +3,20 @@
  *
  * 播放 / 拖拽抛掷 / 跨窗碰撞 / 点击穿透 / 右键菜单 / 聊天弹窗 / 气泡渲染。
  * 事件联动（余额 / 碎碎念 / 广播 / 工作状态）不在此文件——见 events.js。
- * 依赖 constants.js 的全局（CONFIG / VIEW / BASE / S / config / sprites 等），须后加载。
+ * 依赖 constants.js 的全局（CONFIG / VIEW / BASE / S / config / sprites / params 等），须后加载。
  */
 'use strict';
+
+// 独立版第一阶段无凭据/无 LLM：隐藏「碎碎念 / 对话」两个菜单项（设计文档 §2.2 的唯一渲染端补丁）。
+// 参数注入方 = main.js createPetWindows 的 loadFile query（仅 STANDALONE 携带）：参数缺失
+// （浏览器 / bridge 模式）即回退上游行为；第二阶段启用 LLM 后不再注入，两项自动回归。
+// 经 constants.js 的全局 params 单次解析（同 BRIDGE 先例）——index.html 里 constants 先于本文件
+// 加载，故模块顶层就取得到值。放在模块初始化而不是右键菜单里：它本质是常量（页面加载后
+// 永不改变），每次开菜单重算只是把「读一次 URL」伪装成「每只宠物、每次右键都做的事」。
+const NO_LLM = params.get('noLlm') === '1';
+// 冒烟/排障可观测（__dshPetDebug 由 constants.js 建好，仍防一手缺失）：放模块顶层后
+// 渲染端一加载就能读到，不必先右键点一次菜单才有值
+if (window.__dshPetDebug) window.__dshPetDebug.noLlm = NO_LLM;
 
 // ---------- 单只宠物（行为与浏览器 PetCard 一致；纯逻辑来自 src/shared） ----------
 class PetSprite {
@@ -1025,11 +1036,7 @@ class PetSprite {
     // 桌面专属工具根项（打开网站 / 查看余额 / 碎碎念[noLlm 时隐藏] / 对话[noLlm 时隐藏] / 回到初始位置）
     // + 共享菜单树（动作→分类→具体动画）
     // 碎碎念/对话默认无条件显示：手动触发不受 whisperEnabled 限制（该字段只影响自动周期轮询）。
-    // noLlm 参数的注入方 = main.js createPetWindows 的 loadFile query（仅 STANDALONE 独立模式携带，
-    // 设计文档 §2.2 唯一渲染端补丁）；参数缺失（浏览器/bridge 模式）即回退上游行为；
-    // 第二阶段启用 LLM 后不再注入，两项自动回归。经 constants.js 的全局 params 单次解析（同 BRIDGE 先例）。
-    const NO_LLM = params.get('noLlm') === '1';
-    if (window.__dshPetDebug) window.__dshPetDebug.noLlm = NO_LLM; // 冒烟/排障可观测（constants 先于本文件加载，仍防一手缺失）
+    // NO_LLM（隐藏这两项的开关）已在模块顶层解析一次，见文件头。
     const tools = [{ label: '打开网站', action: 'open-site' }];
     if (this.pet.balanceEnabled) tools.push({ label: '查看余额', action: 'show-balance' });
     if (!NO_LLM) tools.push({ label: '碎碎念', action: 'whisper' }, { label: '对话', action: 'chat' });

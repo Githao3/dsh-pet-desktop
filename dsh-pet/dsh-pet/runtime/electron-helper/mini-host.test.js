@@ -7,10 +7,11 @@
 const { test, describe, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const net = require('node:net');
 const { mkdtempSync, rmSync, writeFileSync, mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 const { tmpdir } = require('node:os');
-const { createMiniHost } = require('./mini-host.js');
+const { createMiniHost, initStandalone } = require('./mini-host.js');
 
 const dirs = [];
 // 兜底登记：断言失败时测试体里的 host.close() 走不到，遗留的监听服务会挂住整个 runner
@@ -75,6 +76,44 @@ async function start() {
   const f = fixture();
   const host = track(await createMiniHost(f));
   return { f, host, base: host.url + '/dsh-pet-7340' };
+}
+
+/** 占一个空端口问它号码，随即松开——给「显式 port」用例当锚点，避免写死端口撞车 */
+async function pickFreePort() {
+  const probe = net.createServer();
+  await new Promise((ok) => probe.listen(0, '127.0.0.1', ok));
+  const port = probe.address().port;
+  await new Promise((ok) => probe.close(ok));
+  return port;
+}
+
+/** 端口是否仍可绑定：bind 成功 = 当前没人监听（用来证明泄漏已堵住） */
+async function portIsFree(port) {
+  const probe = net.createServer();
+  const free = await new Promise((ok, err) => {
+    probe.once('error', (e) => (e.code === 'EADDRINUSE' ? ok(false) : err(e)));
+    probe.listen(port, '127.0.0.1', () => ok(true));
+  });
+  if (free) await new Promise((ok) => probe.close(ok));
+  return free;
+}
+
+/** initStandalone 会写进程环境变量；用例内快照还原，不污染同进程跑的其它测试 */
+function withEnvRestore(fn) {
+  const saved = {
+    DSH_PET_CONFIG_URL: process.env.DSH_PET_CONFIG_URL,
+    DSH_PET_PETS: process.env.DSH_PET_PETS,
+  };
+  return (async () => {
+    try {
+      return await fn();
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  })();
 }
 
 /**
@@ -262,5 +301,31 @@ describe('mini-host endpoints', () => {
     assert.equal(require('node:fs').readFileSync(userFile, 'utf8'), '{"marker":1}');
     await h1.close().catch(() => {});
     await h2.close();
+  });
+
+  test('initStandalone 成功路径：显式 port 生效，两个环境变量都注入', async () => {
+    await withEnvRestore(async () => {
+      const f = fixture();
+      const port = await pickFreePort();
+      const host = track(await initStandalone({ ...f, port }));
+      assert.equal(new URL(host.url).port, String(port));
+      assert.equal(process.env.DSH_PET_CONFIG_URL, host.url + '/dsh-pet-7340/config');
+      assert.deepEqual(JSON.parse(process.env.DSH_PET_PETS), [{ id: 'main', size: 462 }]);
+      await host.close();
+    });
+  });
+
+  test('initStandalone 在 listen 之后才抛错：先关服务再上抛（不留被白占的端口）', async () => {
+    await withEnvRestore(async () => {
+      // createMiniHost 全程不读配置（petPaths + 首跑初始用户层 + settings 占位 + listen），
+      // 第一个真读配置的是 initStandalone 里的 desktopPetList（mergedConfig 只在请求里跑）——
+      // 所以只要给一个「空包根」（不写 assets/config.jsonc）就能确定性地复现 listen 之后抛错的
+      // 泄漏窗口，不需要竞态、monkey-patch 也不需为测试开生产代码接缝。
+      const packageRoot = tmp();
+      const port = await pickFreePort();
+      await assert.rejects(() => initStandalone({ packageRoot, dshHome: tmp(), port }), /内置默认配置缺失/);
+      // 泄漏回归的核心断言：端口必须已释放（旧实现里 server 仍在 listen，bind 必失败 EADDRINUSE）
+      assert.equal(await portIsFree(port), true, 'initStandalone 失败后端口仍被占用 = mini-host 泄漏');
+    });
   });
 });

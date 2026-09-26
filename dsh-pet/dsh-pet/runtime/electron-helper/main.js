@@ -671,7 +671,13 @@ app.whenReady().then(async () => {
           click: () => {
             petsVisible = !petsVisible;
             for (const w of windows.values()) {
-              if (petsVisible) w.show();
+              // 已销毁的窗口不能再动它（destroy() 与 'closed' 里的 windows.delete 之间有窗口期，
+              // 迭代中拿到残留引用就抛）——与广播/热更新那几个循环同一守卫
+              if (w.isDestroyed()) continue;
+              // 显示走 showWithoutFocus：宠物窗是 focusable:true（输入框要焦点），show() 会把
+              // 键盘焦点整窗抢过来——用户从托盘点一下「显示宠物」，不该打断他正在打字的窗口。
+              // 隐藏不涉及焦点，保持 hide()。
+              if (petsVisible) w.showWithoutFocus();
               else w.hide();
             }
           },

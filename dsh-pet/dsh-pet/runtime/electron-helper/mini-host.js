@@ -218,14 +218,24 @@ async function createMiniHost({ packageRoot, dshHome, port = 0 }) {
 /**
  * 独立模式总装：起宿主 + 注入 main.js 依赖的两个环境变量（DSH_PET_CONFIG_URL / DSH_PET_PETS）。
  * main.js 只 require 本文件并 await 这一个函数。配置损坏时异常上抛（由 main.js 弹错误框）。
+ * @param packageRoot:string, dshHome?:string, port?:number opts（port 缺省 0 = 随机端口，显式传入只为可测）
  */
-async function initStandalone({ packageRoot, dshHome }) {
+async function initStandalone({ packageRoot, dshHome, port = 0 }) {
   // home 只推导一次：createMiniHost 与 desktopPetList 必须看到同一个数据根
   const home = dshHome || process.env.DSH_HOME || join(homedir(), '.dsh');
-  const host = await createMiniHost({ packageRoot, dshHome: home });
-  process.env.DSH_PET_CONFIG_URL = host.url + PREFIX + '/config';
-  const list = core.desktopPetList(packageRoot, home);
-  if (list.length) process.env.DSH_PET_PETS = JSON.stringify(list);
+  const host = await createMiniHost({ packageRoot, dshHome: home, port });
+  // createMiniHost 返回时端口**已经占住**，而它后面第一个真正读配置的就是 desktopPetList
+  // （createMiniHost 全程不碰 config，mergedConfig 只在请求里跑）——所以这条 listen 之后的窗口期里
+  // 任何异常都必须先关服务再上抛：否则 host 随异常一起丢掉，调用方永远拿不到它，端口留在监听里
+  // （主进程那边却是弹错误框退出，用户看到的是「报错窗 + 一个被白占的端口」）。
+  try {
+    process.env.DSH_PET_CONFIG_URL = host.url + PREFIX + '/config';
+    const list = core.desktopPetList(packageRoot, home);
+    if (list.length) process.env.DSH_PET_PETS = JSON.stringify(list);
+  } catch (e) {
+    await host.close().catch(() => {}); // 关不掉也不掩盖原始异常
+    throw e;
+  }
   return host;
 }
 

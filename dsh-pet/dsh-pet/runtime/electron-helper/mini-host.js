@@ -8,20 +8,24 @@
  *   /font/<f> /pic/<f> 包内静态图/字体（pic/memes/* 归 memes 目录，与上游同规则）
  *   /broadcast /work-status /notify   空转（"无事发生"形状，客户端轮询恒定不触发）
  *   /balance* /whisper /chat          501（第一阶段无凭据/无 LLM；第二阶段就地实装）
+ *   非 GET/HEAD 一律 405；Host 非 127.0.0.1[:port] 一律 403（挡 DNS rebinding）
  *
  * 纯 Node（不 require electron）——可被 main.js 同进程调用，也可独立单测。
  */
 'use strict';
 const { createServer } = require('node:http');
+const fs = require('node:fs');
 const { createReadStream, existsSync, statSync, mkdirSync, writeFileSync } = require('node:fs');
 const { join, normalize, sep } = require('node:path');
 const { homedir } = require('node:os');
 const core = require('./standalone-core.cjs');
 
 const PREFIX = '/dsh-pet-7340';
-/** 与上游 src/host/config.ts 的 ID_FORBIDDEN 同规则（Windows 保留符 + 控制字符） */
-// eslint-disable-next-line no-control-regex
-const ID_FORBIDDEN = /[\\/:\x00-\x1f]/;
+/** 与上游 src/host/config.ts L42 的 ID_FORBIDDEN 同一对象（经 standalone-core 打包再导出，防镜像漂移） */
+const { ID_FORBIDDEN } = core;
+/** 渲染端是 file://（null 源）跨源取 127.0.0.1 宿主，与 main.js bridge 分支同一处理；
+ *  实证 Task1 冒烟可跑，仍显式加头保 Electron 版本演进安全 */
+const CORS = { 'access-control-allow-origin': '*' };
 const MIME = {
   '.webm': 'video/webm',
   '.mov': 'video/quicktime',
@@ -38,25 +42,54 @@ const json = (res, status, obj, noCache) => {
     'content-type': 'application/json; charset=utf-8',
     'content-length': Buffer.byteLength(body),
     ...(noCache ? { 'cache-control': 'no-cache, no-store' } : {}),
+    ...CORS,
   });
   res.end(body);
 };
 const text = (res, status, msg) => {
-  res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8' });
+  res.writeHead(status, {
+    'content-type': 'text/plain; charset=utf-8',
+    'content-length': Buffer.byteLength(msg),
+    ...CORS,
+  });
   res.end(msg);
 };
 const extOf = (p) => p.slice(p.lastIndexOf('.')).toLowerCase();
-/** 整文件流式应答（与上游宿主一致：不支持 Range，素材为短小 webm） */
+/**
+ * 整文件流式应答：与上游 index.ts sendFile 同源（含 issue #62 修复：stat/流尺寸不一致会
+ * 永久 stall，客户端弃读时释放 fd）。长度取自正在读的 fd（open 事件里 fstat），不先 stat 再另开流。
+ */
 function sendFile(res, path) {
-  const { size } = statSync(path);
-  res.writeHead(200, {
-    'content-type': MIME[extOf(path)] ?? 'application/octet-stream',
-    'content-length': size,
-    'cache-control': 'public, max-age=3600',
-  });
   const stream = createReadStream(path);
-  stream.on('error', () => res.destroy());
-  stream.pipe(res);
+  stream.once('open', (fd) => {
+    if (res.destroyed || res.writableEnded) {
+      stream.destroy(); // 客户端在开流前就放弃了
+      return;
+    }
+    try {
+      res.writeHead(200, {
+        'content-type': MIME[extOf(path)] ?? 'application/octet-stream',
+        'content-length': fs.fstatSync(fd).size,
+        'cache-control': 'public, max-age=3600',
+        ...CORS,
+      });
+    } catch {
+      // 极端情况下 fstat 拿不到：不发长度头，交给 Node 用 chunked 收尾（长度天然一致，只是没声明）
+      res.writeHead(200, {
+        'content-type': MIME[extOf(path)] ?? 'application/octet-stream',
+        'cache-control': 'public, max-age=3600',
+        ...CORS,
+      });
+    }
+    stream.pipe(res);
+  });
+  // 读失败（文件被删/权限/被占用）：头未发则 404，随后断连——让客户端立刻看到失败，而不是无限等待
+  stream.on('error', () => {
+    if (!res.headersSent) text(res, 404, 'file not readable');
+    res.destroy();
+  });
+  // 客户端提前断开（快速切动画时高频发生）→ 停读释放 fd，别把整个文件读完
+  res.on('close', () => stream.destroy());
 }
 /** 根目录内安全解析：拼接后必须仍在 root 内（防 .. 穿越），普通文件存在才返回 */
 function resolveExisting(root, rel) {
@@ -91,13 +124,25 @@ async function createMiniHost({ packageRoot, dshHome, port = 0 }) {
 
   const server = createServer((req, res) => {
     try {
+      // 挡 DNS rebinding 与 Host 伪造：服务只在 127.0.0.1 界面监听，这层是纵深防御
+      const hostHeader = String(req.headers.host ?? '');
+      if (!/^127\.0\.0\.1(?::\d+)?$/.test(hostHeader)) return text(res, 403, 'bad host');
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
       const pathname = url.pathname;
       if (!pathname.startsWith(PREFIX + '/')) return text(res, 404, 'mini-host: outside prefix');
-      const rest = decodeURIComponent(pathname.slice(PREFIX.length + 1));
+      // 第一阶段无写端点，405 是唯一诚实答案；第二阶段将在此放行 POST /chat、POST /balance/trigger 等
+      if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: 'method not allowed' });
+      let rest;
+      try {
+        rest = decodeURIComponent(pathname.slice(PREFIX.length + 1));
+      } catch {
+        return text(res, 400, 'bad percent-encoding');
+      }
       const [scope, ...parts] = rest.split('/');
 
-      if (scope === 'config') return json(res, 200, core.mergedConfig(packageRoot, home), true);
+      // 除 font/pic/thumb（前缀下还有子路径，只能按 scope 分流）外，一律整路径精确匹配：
+      // /config/meta 这类画蛇添足的子路径落尾部 400，与上游路由表同样不静默受理
+      if (rest === 'config') return json(res, 200, core.mergedConfig(packageRoot, home), true);
       if (scope === 'font') {
         const f = resolveExisting(join(packageRoot, 'assets', 'fonts'), parts.join('/'));
         return f ? sendFile(res, f) : text(res, 404, 'font not found');
@@ -122,10 +167,10 @@ async function createMiniHost({ packageRoot, dshHome, port = 0 }) {
             resolveExisting(join(packageRoot, 'assets', sub), fileName));
         return from ? sendFile(res, from) : text(res, 404, 'asset not found');
       }
-      if (scope === 'broadcast') return json(res, 200, { ok: true, text: '', ts: 0 }, true);
-      if (scope === 'work-status') return json(res, 200, { ts: 0, state: null, task: null }, true);
-      if (scope === 'notify') return json(res, 200, { ok: true, seq: 0, frames: [] }, true);
-      if (scope === 'balance' || rest === 'balance/trigger' || scope === 'whisper' || scope === 'chat') {
+      if (rest === 'broadcast') return json(res, 200, { ok: true, text: '', ts: 0 }, true);
+      if (rest === 'work-status') return json(res, 200, { ts: 0, state: null, task: null }, true);
+      if (rest === 'notify') return json(res, 200, { ok: true, seq: 0, frames: [] }, true);
+      if (rest === 'balance' || rest === 'balance/trigger' || rest === 'whisper' || rest === 'chat') {
         return json(res, 501, { error: 'dsh-pet standalone: not available in phase 1 (needs credentials / LLM)' });
       }
       return text(
@@ -138,17 +183,24 @@ async function createMiniHost({ packageRoot, dshHome, port = 0 }) {
     }
   });
 
-  await new Promise((ok) => server.listen(port, '127.0.0.1', ok));
+  // listen 失败（端口被占等）必须上抛——独立模式下静默失败 = 渲染端永远拿不到数据
+  await new Promise((ok, err) => {
+    server.once('error', err);
+    server.listen(port, '127.0.0.1', () => {
+      server.removeListener('error', err);
+      ok();
+    });
+  });
   const bound = server.address().port;
   return {
     server,
     url: `http://127.0.0.1:${bound}`,
     close: () =>
-      new Promise((ok) => {
-        server.close(ok);
+      new Promise((ok, err) => {
         // 只靠 server.close() 会等 keep-alive 套接字自己超时（实测 ~3s 才回 close 事件，
         // 表现为退出应用时白等 3 秒）——客户端是本地渲染端，关停时无需保留任何连接
         server.closeAllConnections();
+        server.close((e) => (e ? err(e) : ok()));
       }),
   };
 }
@@ -157,10 +209,11 @@ async function createMiniHost({ packageRoot, dshHome, port = 0 }) {
  * 独立模式总装：起宿主 + 注入 main.js 依赖的两个环境变量（DSH_PET_CONFIG_URL / DSH_PET_PETS）。
  * main.js 只 require 本文件并 await 这一个函数。配置损坏时异常上抛（由 main.js 弹错误框）。
  */
-async function initStandalone({ packageRoot }) {
-  const host = await createMiniHost({ packageRoot });
+async function initStandalone({ packageRoot, dshHome }) {
+  // home 只推导一次：createMiniHost 与 desktopPetList 必须看到同一个数据根
+  const home = dshHome || process.env.DSH_HOME || join(homedir(), '.dsh');
+  const host = await createMiniHost({ packageRoot, dshHome: home });
   process.env.DSH_PET_CONFIG_URL = host.url + PREFIX + '/config';
-  const home = process.env.DSH_HOME || join(homedir(), '.dsh');
   const list = core.desktopPetList(packageRoot, home);
   if (list.length) process.env.DSH_PET_PETS = JSON.stringify(list);
   return host;

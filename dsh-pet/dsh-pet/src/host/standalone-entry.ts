@@ -17,6 +17,9 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readAllConfig, flattenPetList, type ConfigPaths } from './config';
 
+// 供 mini-host 同源引用，防镜像漂移：thumb 路由的 petId 校验与配置加载器必须共用同一正则（config.ts L42）
+export { ID_FORBIDDEN } from './config';
+
 /** 桌面可见判定（与上游 host/index.ts 本地复制 isDesktopVisible 的既有做法一致：host 半侧不 import shared） */
 const isDesktopDisplay = (display: unknown): boolean => display === 'desktop' || display === 'both';
 

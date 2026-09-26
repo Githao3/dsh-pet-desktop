@@ -69,7 +69,10 @@ const DPI_PROBE = process.env.DSH_PET_DPI_PROBE === '1';
 const DPI_MARK = 'dsh-pet-primary-scale:';
 
 // ---------- 独立桌宠模式（无 DSH 宿主；设计文档 §2） ----------
-const STANDALONE = process.env.DSH_PET_STANDALONE === '1';
+// 总闸：开发流由 start-standalone.mjs 注入 DSH_PET_STANDALONE=1。打包出来的 exe 没有启动器替它注入，
+// 而「双击 exe 就是一只独立桌宠」正是打包的唯一用途（验收项：portable exe 在无 Node 的目录双击，
+// 功能与开发流一致），故 app.isPackaged 默认进独立模式；显式 DSH_PET_STANDALONE=0 保留退出这条默认的后门。
+const STANDALONE = process.env.DSH_PET_STANDALONE === '1' || (app.isPackaged && process.env.DSH_PET_STANDALONE !== '0');
 // 包根：开发 = runtime/electron-helper 上两级；打包后 = resources/dsh-pet-package（Task 8 extraResources）
 const PACKAGE_ROOT =
   process.env.DSH_PET_PACKAGE_ROOT ||
@@ -533,8 +536,12 @@ function createPetWindows() {
       windowIgnore.delete(win.id);
       inputBusy.delete(win.id);
     });
+    // loadFile 的相对路径按 **appPath** 解析（Electron 43 实测：`loadFile('index.html')` 找的是
+    // `<appPath>/index.html`，不是 main.js 同目录）。开发流下 appPath 恰好就是本目录（electron 以
+    // `electron.exe <路径>/main.js` 拉起时 appPath = 该脚本所在目录），打包态 appPath 却是
+    // resources/app，index.html 在 resources/app/runtime/electron-helper/ 下 → 不写绝对路径就白屏。
     win
-      .loadFile('index.html', {
+      .loadFile(path.join(__dirname, 'index.html'), {
         query: {
           configUrl,
           bridge: BRIDGE ? '1' : '0',

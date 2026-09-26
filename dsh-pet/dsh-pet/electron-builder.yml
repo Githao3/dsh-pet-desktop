@@ -1,0 +1,46 @@
+# 独立桌宠打包配置（设计文档 §7）
+#
+# 打包缓存坑（实际踩到）：electron-builder 把 winCodeSign / nsis / icons 解压到自己的缓存
+# （默认 %LOCALAPPDATA%\electron-builder\Cache）。若为了离线用 ELECTRON_BUILDER_CACHE 把它指进仓库，
+# 必须指到 dsh-pet/dsh-pet **之外**（例如工作区根 electron-builder-cache/，已被 .gitignore 覆盖）：
+# 本包 package.json 是 "type": "module"，缓存在包内时 electron-builder 那个 CJS 的 icon-tool.js
+# 会被 Node 当 ESM 执行 → ReferenceError: require is not defined in ES module scope。
+appId: com.local.dsh-pet-desktop
+productName: dsh-pet-desktop
+directories:
+  output: dist-desktop
+# 主入口改指 helper 的 main.js（root package.json 的 main 是 DSH 插件入口，不能用）
+extraMetadata:
+  main: runtime/electron-helper/main.js
+asar: false # helper 体系按纯目录设计（loadFile 子资源、nativeImage 路径），关 asar 保行为一致
+# 包里的 app 目录只有 runtime/electron-helper（node_modules 不入包），没有原生依赖；
+# 关掉 electron-builder 默认会跑的 @electron/rebuild，打包过程不再碰 npm（国内网络策略）。
+npmRebuild: false
+files:
+  - runtime/electron-helper/**
+  - package.json
+extraResources:
+  # 素材/配置以"包"形态随附：main.js 打包态取 resources/dsh-pet-package
+  # 白名单按"运行时真会读的东西"逐目录列（与上游 npm files 同一口径）：
+  # assets/preview 的 106 个 GIF 只给 README/预览页看，mini-host 不服务它，随包白送 64MB 没意义。
+  - from: .
+    to: dsh-pet-package
+    filter:
+      - assets/config.jsonc
+      - assets/fonts/**
+      - assets/memes/**
+      - assets/pic/**
+      - assets/webm/**
+      - runtime/electron-helper/standalone-core.cjs
+win:
+  target:
+    - nsis
+    - portable
+  # exe/安装包图标：electron-builder 硬要求 ≥256×256（实测 192² 直接
+  # `Error: Icon must be at least 256x256 pixels, provided: 192x192`）。本文件由
+  # assets/pic/notify-done.png（本项目的通知图标资产，192²，同包 MIT）用
+  # System.Drawing HighQualityBicubic 等比放大到 256² 得来，未改像素内容以外的任何设计。
+  icon: assets/icon-256.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

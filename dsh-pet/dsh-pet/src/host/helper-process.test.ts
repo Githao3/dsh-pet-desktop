@@ -13,6 +13,7 @@ import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -44,6 +45,16 @@ function withIsolatedHome(fn: (dir: string) => void): void {
     if (savedPath === undefined) delete process.env.DSH_PET_ELECTRON_PATH;
     else process.env.DSH_PET_ELECTRON_PATH = savedPath;
     rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** 优先级 2 的输入：本机已装的 electron npm 包二进制路径（未装则 undefined） */
+function localElectronPkg(): string | undefined {
+  try {
+    const resolved = createRequire(import.meta.url)('electron');
+    return typeof resolved === 'string' && resolved ? resolved : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -107,9 +118,12 @@ describe('resolveElectronPath —— 候选优先级', () => {
     });
   });
 
-  test('一个都不存在时返回 undefined', () => {
+  test('一个都不存在时返回 undefined（本机装了 electron 包时它兜底）', () => {
     withIsolatedHome((dir) => {
-      assert.equal(resolveElectronPath([join(dir, 'missing-1.exe'), join(dir, 'missing-2.exe')]), undefined);
+      // 隔离 DSH_HOME 下「落地路径」不存在，显式候选也不存在；Task 8 起本仓库带
+      // electron devDependency，优先级 2 恒有一个可用回落项。未装包的开发/CI 环境里
+      // localElectronPkg() 为 undefined，断言退回原语义「全不存在 → undefined」。
+      assert.equal(resolveElectronPath([join(dir, 'missing-1.exe'), join(dir, 'missing-2.exe')]), localElectronPkg());
     });
   });
 
@@ -129,7 +143,11 @@ describe('resolveElectronPath —— 候选优先级', () => {
     });
   });
 
-  test('$DSH_HOME/electron 落地路径在本地候选中（隔离 DSH_HOME 时可命中）', () => {
+  test('本机 electron 包优先于 $DSH_HOME/electron 落地路径，但让位于显式候选', () => {
+    // resolveElectronPath 注释里的优先级：1 显式候选/环境变量 → 2 本机 electron 包
+    // → 3 $DSH_HOME/electron。Task 8 把 electron 加成 devDependency 后，第 2 级在开发机
+    // 上恒存在（与落地那份同版本，43.3.0），故单独钉住这条优先级关系：
+    // 未装包的环境（CI）里 localElectronPkg() 为 undefined，落地路径才会上位。
     withIsolatedHome((dir) => {
       process.env.DSH_HOME = join(dir, 'dshhome');
       const rel =
@@ -141,7 +159,9 @@ describe('resolveElectronPath —— 候选优先级', () => {
       const landed = join(dir, 'dshhome', 'electron', rel);
       mkdirSync(join(dir, 'dshhome', 'electron'), { recursive: true });
       writeFileSync(landed, '');
-      assert.equal(resolveElectronPath([]), landed);
+      assert.equal(resolveElectronPath([]), localElectronPkg() ?? landed);
+      // 显式候选（优先级 1）必须压过本机包 —— 「用户配置覆盖一切」的语义
+      assert.equal(resolveElectronPath([landed]), landed);
     });
   });
 });

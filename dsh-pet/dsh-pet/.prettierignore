@@ -1,4 +1,6 @@
 lib
+dist-desktop
+temp
 node_modules
 assets
 runtime/electron-helper/shared-core.js

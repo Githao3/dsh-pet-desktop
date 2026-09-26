@@ -8,7 +8,20 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
-  { ignores: ['lib/**', 'scripts/**', 'assets/**', 'runtime/**', 'node_modules/**'] },
+  {
+    ignores: [
+      'lib/**',
+      'scripts/**',
+      'assets/**',
+      'runtime/**',
+      'node_modules/**',
+      // Task 8 新增：electron-builder 的产物目录（dist-desktop/，同 lib 一样是生成物，
+      // 里面连 node_modules 都有）与临时草稿目录 temp/（.gitignore 已忽略），
+      // 两者都不该进 `eslint .` 的门禁。
+      'dist-desktop/**',
+      'temp/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

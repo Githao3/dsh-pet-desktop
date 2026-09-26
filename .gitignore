@@ -21,6 +21,12 @@ dsh-pet-desktop-*.exe
 *.blockmap
 electron-builder-cache/
 
+# 独立桌面应用的构建产物（均由 npm run prepare 生成，不入库）
+# 注：包体在 dsh-pet/dsh-pet/，所以路径要带两层 dsh-pet（单层的写法匹配不到任何东西）
+dsh-pet/dsh-pet/runtime/electron-helper/shared-core.js
+dsh-pet/dsh-pet/runtime/electron-helper/standalone-core.cjs
+dsh-pet/dsh-pet/dist-desktop/
+
 # 系统与编辑器
 Thumbs.db
 Desktop.ini

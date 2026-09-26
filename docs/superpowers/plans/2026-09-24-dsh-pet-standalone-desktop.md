@@ -74,6 +74,8 @@ npm run start:desktop -- http://127.0.0.1:8231/dsh-pet-7340/config
 
 ### Task 2: standalone-entry.ts（配置聚合 + 桌面宠物清单 + 初始用户配置）
 
+> ✅ 已完成（b1e4c10 → eae8c02 → 1a2f920）。代码以 `src/host/standalone-entry.ts` 审查后版本为准，与本节下列计稿的差异：STARTER_USER_CONFIG 瘦身（只写差异字段+name）、desktopPetList 去掉静默 catch（异常上抛）、本地谓词 isDesktopDisplay 替代 shared 导入、参数名 dataRoot；另补了抛错回归测试。
+
 **Files:**
 - Create: `src/host/standalone-entry.ts`
 - Test: `src/host/standalone-entry.test.ts`
@@ -301,6 +303,8 @@ git commit -m "feat(standalone): host config aggregation entry with starter user
 ---
 
 ### Task 3: 构建 standalone-core.cjs（rolldown → CJS）
+
+> ✅ 已完成。产物实测：bundle 只 require `node:fs` / `node:path`（零 `@deepseek-ai/*`、零三方依赖），四个导出（mergedConfig/desktopPetList/ensureStarterUserConfig/petPaths）require 后均为 function。与计稿的差异：① 根 .gitignore 三行必须带两层前缀 `dsh-pet/dsh-pet/…`（包体真身在 dsh-pet/dsh-pet/，单层写法匹配不到任何东西，已用 `git check-ignore -v` 实测）；② 生成的 .cjs 追加进 `dsh-pet/dsh-pet/.prettierignore`（`prettier --check .` 会扫 runtime/，与 shared-core.js 同一处理），否则 format:check 红。
 
 **Files:**
 - Create: `scripts/build-standalone-core.mjs`

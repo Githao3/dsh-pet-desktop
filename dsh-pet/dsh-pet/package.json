@@ -65,6 +65,7 @@
   "scripts": {
     "bundle": "tsdown",
     "build:desktop-core": "node scripts/build-desktop-core.mjs",
+    "build:standalone-core": "node scripts/build-standalone-core.mjs",
     "watch": "tsdown --watch",
     "ensure:electron": "node scripts/ensure-electron.mjs",
     "start:desktop": "node scripts/start-desktop.mjs",

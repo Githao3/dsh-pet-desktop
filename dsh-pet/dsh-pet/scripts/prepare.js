@@ -12,6 +12,7 @@
  * 做什么：
  *   1. 构建（npm run bundle：tsdown 把 src/ → lib/）
  *   1.5 构建桌面共享核心（npm run build:desktop-core：src/shared → window.PetShared）
+ *   1.55 构建独立应用宿主核心（npm run build:standalone-core：src/host/standalone-entry → standalone-core.cjs）
  *   1.6 生成类型声明（npm run types：tsc → lib/types/*.d.ts）
  *   2. 改写 package.json：files 收敛为发布清单（含桌面模式运行时 runtime/electron-helper、
  *      表情包 assets/memes）—— 幂等：跑一次即定格为当前状态，再跑结果不变，无需备份/恢复
@@ -44,6 +45,15 @@ const coreRun = process.platform === 'win32' ? 'cmd /c npm run build:desktop-cor
 const buildCore = spawnSync(coreRun, { cwd: ROOT, stdio: 'inherit', shell: true });
 if (buildCore.status !== 0) {
   console.error(`[prepare] 桌面 shared-core 构建失败 (exit ${buildCore.status})`);
+  process.exit(1);
+}
+
+// 1.55 构建独立应用宿主核心（src/host/standalone-entry → CJS，供 electron-helper 主进程 require）
+console.log('[prepare] building standalone core...');
+const saRun = process.platform === 'win32' ? 'cmd /c npm run build:standalone-core' : 'npm run build:standalone-core';
+const buildSa = spawnSync(saRun, { cwd: ROOT, stdio: 'inherit', shell: true });
+if (buildSa.status !== 0) {
+  console.error(`[prepare] 独立 standalone-core 构建失败 (exit ${buildSa.status})`);
   process.exit(1);
 }
 

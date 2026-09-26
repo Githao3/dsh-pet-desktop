@@ -77,6 +77,8 @@ const PACKAGE_ROOT =
 let miniHost = null; // mini-host 句柄（before-quit 时关服务）
 /** 托盘实例（独立模式唯一显式出口；保持模块级引用防被 GC 回收后托盘消失） */
 let standaloneTray = null;
+/** 宠物当前是否可见（托盘「显示/隐藏」与 second-instance 亮窗共用的单一状态源） */
+let petsVisible = true;
 // 单实例：第二次启动直接退出（托盘才是出口，不能攒出两只宠物）。DPI 探测子进程继承本变量，
 // 但它是父进程（正持着锁）spawn 的短命工具进程——若也去抢锁必然失败并自杀，探测就永远拿不到值，
 // 必须排除。
@@ -97,6 +99,8 @@ if (STANDALONE && !DPI_PROBE) {
     for (const w of windows.values()) {
       if (!w.isDestroyed()) w.showWithoutFocus();
     }
+    // 与托盘显隐状态同步：托盘隐藏后二次启动亮窗，不置位的话托盘要连点两次才显示
+    petsVisible = true;
   });
 }
 if (STANDALONE) {
@@ -677,7 +681,6 @@ app.whenReady().then(async () => {
     const { Tray, Menu, nativeImage } = electronApi;
     standaloneTray = new Tray(nativeImage.createFromPath(path.join(PACKAGE_ROOT, 'assets', 'pic', 'notify-done.png')));
     standaloneTray.setToolTip('dsh-pet 桌宠');
-    let petsVisible = true;
     standaloneTray.setContextMenu(
       Menu.buildFromTemplate([
         {

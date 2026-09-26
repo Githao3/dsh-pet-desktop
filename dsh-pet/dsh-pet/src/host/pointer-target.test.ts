@@ -154,15 +154,19 @@ describe('源码守卫 —— helper 的两个兜底必须在位', () => {
   const main = readSource(helper + 'main.js');
 
   test('#55-1 兜底显示：ready-to-show 之外还要有"加载完成后仍未显示就 show"', () => {
-    assert.ok(/once\('ready-to-show', \(\) => win\.show\(\)\)/.test(main), 'ready-to-show 的正常路径不能删');
-    assert.ok(
-      /once\('did-finish-load'/.test(main),
-      '必须有 did-finish-load 兜底（paintWhenInitiallyHidden:false 时 ready-to-show 永不触发）',
-    );
-    assert.ok(
-      /!win\.isDestroyed\(\) && !win\.isVisible\(\)\) win\.show\(\)/.test(main),
-      '兜底必须在"仍未显示"时才 show',
-    );
+    // 结构化提取两个显示入口的整段回调（结束边界 = 第一个「换行 + 缩进 + });」），
+    // 断言只看段内语义，不做字符距离预算：往里加注释/换行不会让守卫假红。
+    const rts = main.match(/win\.once\('ready-to-show'[\s\S]*?\n\s*\}\);/)?.[0] ?? '';
+    assert.ok(rts, 'ready-to-show 处理器必须在位（提取失败）');
+    assert.match(rts, /win\.show\(\)/, 'ready-to-show 的正常路径不能删');
+    const fb = main.match(/webContents\.once\('did-finish-load'[\s\S]*?\n\s*\}\);/)?.[0] ?? '';
+    assert.ok(fb, '必须有 did-finish-load 兜底（paintWhenInitiallyHidden:false 时 ready-to-show 永不触发）');
+    assert.match(fb, /!win\.isDestroyed\(\)/, '兜底得先确认窗口未被销毁');
+    assert.match(fb, /!win\.isVisible\(\)/, '兜底必须在"仍未显示"时才 show');
+    assert.match(fb, /win\.show\(\)/, '兜底最终要 show');
+    // 两个入口都不得推翻托盘的隐藏态（独立模式 petsVisible 可为 false；bridge/dev 下恒 true，行为不变）
+    assert.match(rts, /petsVisible/, 'ready-to-show 的首帧显示必须尊重 petsVisible');
+    assert.match(fb, /petsVisible/, '兜底 show 必须尊重 petsVisible');
   });
 
   test('#55-2 兜底轮询：主进程按真实光标独立判定，且与渲染端通道共用同一出口', () => {

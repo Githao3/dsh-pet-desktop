@@ -494,14 +494,21 @@ function createPetWindows() {
     // 默认整窗点击穿透（renderer 在光标进/出身体命中区时经 IPC 翻转可交互）；
     // forward:true 保证穿透期间 mousemove 仍转发进渲染端做命中判定。
     setWindowIgnore(win, true);
-    win.once('ready-to-show', () => win.show());
+    // 首帧显示。独立模式下若托盘已经把宠物隐藏（petsVisible=false），新建/重建的窗口不得自己冒出来
+    // ——否则「隐藏宠物」会被下一次加载无声推翻。非独立模式 petsVisible 恒为 true，守卫必然通过，
+    // 行为与改动前逐字一致。这里保持 show() 不用 showWithoutFocus：首帧需要真实可见性，抢焦点只在
+    // 用户主动亮窗（托盘显示 / second-instance）那条路径上才需要处理。
+    win.once('ready-to-show', () => {
+      if (STANDALONE && !petsVisible) return;
+      win.show();
+    });
     // [#55 兜底显示] paintWhenInitiallyHidden:false 时渲染器可能不产出首帧，ready-to-show 便永不触发
     // （Electron 文档原文：ready-to-show "will never fire if you use paintWhenInitiallyHidden: false"），
     // 而 show() 只挂在它上面 → 窗口永远隐藏（进程活着、宠物逻辑照跑，桌面上什么都没有）。
     // 页面加载完成后强制兜底一次；zoomFactor 的设置在更早注册的 did-finish-load 里，顺序不受影响。
     win.webContents.once('did-finish-load', () => {
       setTimeout(() => {
-        if (!win.isDestroyed() && !win.isVisible()) win.show();
+        if (!win.isDestroyed() && !win.isVisible() && petsVisible) win.show();
       }, 400);
     });
     // [#55 兜底交互] 上面的翻转链路只有「Electron forward 鼠标钩子 → 渲染端命中判定」一个入口，

@@ -8,6 +8,11 @@
  *   ③ sprite.js 用 constants.js 的全局 params 消费（单次解析，同 BRIDGE 先例），不许退回
  *      就地 new URLSearchParams(location.search)。
  *
+ * 断言风格：一律「结构化提取 + 语义断言」（先取出回调体 / 取出所在行，再断言其中出现或未出现
+ * 什么调用）。禁止字符距离预算（[\s\S]{0,N}?）与整行签名等值：距离预算会让「加一句注释、多换一行」
+ * 就假红，而真正的语义回归（showWithoutFocus 被换成 show）反而可能因为落在预算内而漏判。
+ * 这里断的是「语义 = 不抢焦点」，与字符距离无关。
+ *
  * 用 Node 内置 test runner（node:test），不引入任何 npm 依赖。
  */
 import { test, describe } from 'node:test';
@@ -20,41 +25,76 @@ const helper = '../../runtime/electron-helper/';
 /** 包内文件源码（守卫用；相对 src/host/ 解析） */
 const readSource = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
+/** 取第一行包含 needle 的源码行（找不到则空串）：行内语义断言，不关心这一行前后有多少内容 */
+const lineWith = (src: string, needle: string): string => src.split('\n').find((l) => l.includes(needle)) ?? '';
+
+/**
+ * 提取 `app.on('<事件>', (…) => { … })` 的整段回调（含 app.on 那一行）。
+ * 结束边界 = 第一个「换行 + 缩进 + });」，与回调体长度/行数无关：往里插注释、增删语句都照样
+ * 提取到整段，所以后续断言可以是纯语义的（有什么调用 / 没有什么调用）。
+ */
+const extractHandler = (src: string, event: string): string =>
+  src.match(new RegExp(`app\\.on\\('${event}',\\s*\\([^)]*\\)\\s*=>\\s*\\{[\\s\\S]*?\\n\\s*\\}\\);`))?.[0] ?? '';
+
 describe('守卫：main.js 的独立模式接线必须在位（设计文档 §2）', () => {
   const main = readSource(helper + 'main.js');
 
   test('总闸 = DSH_PET_STANDALONE 环境变量；包根解析（打包走 resourcesPath）', () => {
-    assert.ok(/DSH_PET_STANDALONE === '1'/.test(main), '独立模式总闸必须存在');
-    assert.ok(/dsh-pet-package/.test(main), '打包后包根必须落到 resources/dsh-pet-package（Task 8）');
+    assert.match(main, /DSH_PET_STANDALONE\s*===\s*'1'/, '独立模式总闸必须存在');
+    assert.match(main, /dsh-pet-package/, '打包后包根必须落到 resources/dsh-pet-package（Task 8）');
   });
 
   test('mini-host 同进程接线：await initStandalone（配置损坏弹错误框退出，不静默半死）', () => {
-    assert.ok(/require\('\.\/mini-host\.js'\)/.test(main), '必须接线 mini-host');
-    assert.ok(/await initStandalone\(\{ packageRoot: PACKAGE_ROOT \}\)/.test(main), '必须 await 总装');
-    assert.ok(/showErrorBox/.test(main), '启动失败必须弹错误框');
+    assert.match(main, /require\('\.\/mini-host\.js'\)/, '必须接线 mini-host');
+    // 只钉「await + 对象实参里有 packageRoot 这一项」：实参怎么写（换行、加 dshHome/port、改属性
+    // 顺序）都不敏感，initStandalone 的签名扩展不会让守卫假红
+    assert.match(main, /await initStandalone\(\s*\{[^}]*\bpackageRoot\b/, '必须 await 总装');
+    assert.match(main, /showErrorBox/, '启动失败必须弹错误框');
   });
 
   test('单实例锁必须排除 DPI 探测子进程（探测子进程继承 env，抢锁必失败自杀 → 永远探不到值）', () => {
-    assert.ok(/STANDALONE && !DPI_PROBE && !app\.requestSingleInstanceLock\(\)/.test(main));
+    const lockLine = lineWith(main, 'app.requestSingleInstanceLock()');
+    assert.match(lockLine, /^\s*if \(.*\bapp\.requestSingleInstanceLock\(\)/, '抢锁必须在 if 条件里（失败即退出）');
+    assert.match(lockLine, /\bSTANDALONE\b/, '锁只在独立模式生效（bridge/dev 保持上游行为）');
+    assert.match(lockLine, /!DPI_PROBE/, '锁必须排除 DPI 探测子进程');
   });
 
   test('二次启动走 second-instance：已有实例把宠物亮出来（设计文档 §4），不静默零反馈', () => {
-    assert.ok(/app\.on\('second-instance'/.test(main), '第一实例必须接住 second-instance');
+    // 提取整段回调再断语义，而不是「相隔 300 字符内必须出现 showWithoutFocus」
+    const si = extractHandler(main, 'second-instance');
+    assert.ok(si, "第一实例必须接住 second-instance：app.on('second-instance', (…) => {…}) 回调体提取失败");
     // 亮出来用 showWithoutFocus（不抢焦点），与托盘「显示宠物」同一条路径
-    assert.ok(/app\.on\('second-instance'[\s\S]{0,300}?showWithoutFocus\(\)/.test(main), '现身不得抢焦点');
+    assert.match(si, /showWithoutFocus\(\)/, 'second-instance 必须把宠物亮出来');
+    // 同一回调的反面语义：段内不得出现任何抢焦点/抢层调用（若将来在注释里写下 show() 也会命中，
+    // 那是刻意收紧——宁可改注释也不放宽语义）
+    assert.doesNotMatch(si, /\.show\(\)|\.focus\(\)|\.moveTop\(\)/, '现身不得抢焦点（禁 show()/focus()/moveTop()）');
+    // 与托盘显隐状态同步：不置位的话托盘要连点两次才显示
+    assert.match(si, /petsVisible\s*=\s*true/, '亮窗后必须回写 petsVisible');
+  });
+
+  test('首帧显示要尊重 petsVisible（托盘隐藏后新窗口不得自己冒出来）', () => {
+    const rts = main.match(/win\.once\('ready-to-show'[\s\S]*?\n\s*\}\);/)?.[0] ?? '';
+    assert.ok(rts, 'ready-to-show 处理器必须在位（提取失败）');
+    assert.match(rts, /petsVisible/, '独立模式首帧必须按 petsVisible 决定是否显示');
+    // 首帧仍需真实可见，这里不许换成 showWithoutFocus（抢焦点只在用户主动亮窗时才需要考虑）
+    assert.match(rts, /win\.show\(\)/, '首帧走 show()：非独立模式行为必须逐字不变');
   });
 
   test('托盘是唯一显式出口：window-all-closed 在独立模式不杀进程，before-quit 关迷你宿主', () => {
-    assert.ok(/new Tray\(/.test(main), '独立模式必须建托盘');
-    assert.ok(
-      /app\.on\('window-all-closed', \(\) => \{\s*if \(STANDALONE\) return;/.test(main),
-      'window-all-closed 第一行必须让独立模式豁免（托盘才是出口）',
-    );
-    assert.ok(/miniHost\.close\(\)/.test(main), 'before-quit 必须关迷你宿主');
+    assert.match(main, /new Tray\(/, '独立模式必须建托盘');
+    const wac = extractHandler(main, 'window-all-closed');
+    assert.ok(wac, '必须接线 window-all-closed');
+    // 语义：回调第一行就让独立模式 return（不看后面的语句怎么写）
+    assert.match(wac, /^\s*if \(STANDALONE\) return;/m, 'window-all-closed 第一行必须让独立模式豁免（托盘才是出口）');
+    assert.match(main, /miniHost\.close\(\)/, 'before-quit 必须关迷你宿主');
   });
 
   test('noLlm=1 只经 loadFile query 注入，且仅 STANDALONE 携带', () => {
-    assert.ok(/\.\.\.\(STANDALONE \? \{ noLlm: '1' \} : \{\}\),/.test(main), 'query 展开必须条件注入');
+    const line = lineWith(main, "noLlm: '1'");
+    assert.ok(line, 'query 里必须注入 noLlm=1');
+    assert.match(line, /\.\.\.\(/, '必须以展开表达式并入 query（不是写死一个对象）');
+    assert.match(line, /STANDALONE\s*\?/, '只有 STANDALONE 携带 noLlm');
+    assert.match(line, /:\s*\{\}\)/, '非独立模式展开成空对象');
   });
 });
 
@@ -62,14 +102,19 @@ describe('守卫：sprite.js 的 noLlm 消费走全局 params（Task 5 评审遗
   const sprite = readSource(helper + 'sprite.js');
 
   test('用 constants.js 的全局 params 单次解析（同 BRIDGE 先例），不得就地再 new URLSearchParams', () => {
-    assert.ok(/const NO_LLM = params\.get\('noLlm'\) === '1';/.test(sprite));
-    assert.ok(
-      !/new URLSearchParams\(location\.search\)\.get\('noLlm'\)/.test(sprite),
+    const line = lineWith(sprite, "params.get('noLlm')");
+    assert.match(line, /\bNO_LLM\b\s*=\s*params\.get\('noLlm'\)\s*===\s*'1'/, 'NO_LLM 必须由全局 params 解析');
+    assert.doesNotMatch(
+      sprite,
+      /new URLSearchParams\(location\.search\)\.get\('noLlm'\)/,
       'noLlm 必须复用全局 params（多处解析会漂移）',
     );
   });
 
   test('NO_LLM 挂上调试钩子（冒烟可观测 __dshPetDebug.noLlm）', () => {
-    assert.ok(/window\.__dshPetDebug\)\s*window\.__dshPetDebug\.noLlm = NO_LLM/.test(sprite));
+    const line = lineWith(sprite, '__dshPetDebug.noLlm');
+    assert.ok(line, '__dshPetDebug.noLlm 必须存在');
+    assert.match(line, /if \(window\.__dshPetDebug\)/, '钩子必须防一手缺失（不裸赋值）');
+    assert.match(line, /=\s*NO_LLM/, '挂的必须是 NO_LLM 本身');
   });
 });

@@ -68,6 +68,30 @@ const DPI_PROBE = process.env.DSH_PET_DPI_PROBE === '1';
 /** 探测进程的输出标记（父进程按它抓值） */
 const DPI_MARK = 'dsh-pet-primary-scale:';
 
+// ---------- 独立桌宠模式（无 DSH 宿主；设计文档 §2） ----------
+const STANDALONE = process.env.DSH_PET_STANDALONE === '1';
+// 包根：开发 = runtime/electron-helper 上两级；打包后 = resources/dsh-pet-package（Task 8 extraResources）
+const PACKAGE_ROOT =
+  process.env.DSH_PET_PACKAGE_ROOT ||
+  (app.isPackaged ? path.join(process.resourcesPath, 'dsh-pet-package') : path.join(__dirname, '..', '..'));
+let miniHost = null; // mini-host 句柄（before-quit 时关服务）
+/** 托盘实例（独立模式唯一显式出口；保持模块级引用防被 GC 回收后托盘消失） */
+let standaloneTray = null;
+// 单实例：第二次启动直接退出（托盘才是出口，不能攒出两只宠物）。DPI 探测子进程继承本变量，
+// 但它是父进程（正持着锁）spawn 的短命工具进程——若也去抢锁必然失败并自杀，探测就永远拿不到值，
+// 必须排除。
+if (STANDALONE && !DPI_PROBE && !app.requestSingleInstanceLock()) {
+  console.log('[standalone] another instance is running, quit.');
+  // 用 exit 不用 quit：quit 不拦 whenReady，第二个实例会先把 mini-host 端口白绑一轮才退
+  app.exit(0);
+}
+if (STANDALONE) {
+  // 退出前关掉迷你宿主本地服务（close 幂等且 reject-safe，仍兜一层 catch）
+  app.on('before-quit', () => {
+    if (miniHost && miniHost.server) miniHost.close().catch(() => {});
+  });
+}
+
 // ---------- 宿主存活（issue #56）：管道断开 / 父进程消失 → 自己退出 ----------
 //
 // 【为什么必须自己退】宿主退出后，它在 helper 的 stdout/stderr 上握着的管道读端一起关闭；helper
@@ -501,6 +525,9 @@ function createPetWindows() {
           // 逐屏完整面板（含任务栏区）：抛掷越界侧探测用（任务栏条带不当墙，见 shared/physics.ts）
           panels: JSON.stringify(geo.panels),
           primaryIndex: String(geo.primaryIndex),
+          // 独立版第一阶段无凭据/无 LLM：隐藏碎碎念/对话菜单项（设计文档 §2.2 唯一渲染端补丁；
+          // sprite.js 经 params.get('noLlm') 消费；第二阶段启用 LLM 后不再注入，菜单自动回归）
+          ...(STANDALONE ? { noLlm: '1' } : {}),
         },
       })
       .catch((error) => {
@@ -609,13 +636,50 @@ async function handleBridgeRequest(request) {
   return new Response(resp.body ?? '', { status: resp.status || 200, headers });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // 探测子进程：此时没有 force-device-scale-factor，读到的是 Windows 的真实主屏缩放。
   // 退出推迟一拍——在 ready 回调里直接 app.exit() 会赶在 stdout 落盘前拆掉进程
   if (DPI_PROBE) {
     process.stdout.write(DPI_MARK + screen.getPrimaryDisplay().scaleFactor + '\n');
     setTimeout(() => app.exit(0), 0);
     return;
+  }
+
+  // 独立模式：先起迷你宿主（initStandalone 就地设 DSH_PET_CONFIG_URL / DSH_PET_PETS，
+  // 必须赶在 createPetWindows() 读它们之前），失败弹错误框退出，绝不静默半死。
+  if (STANDALONE && !DPI_PROBE) {
+    const { initStandalone } = require('./mini-host.js');
+    try {
+      miniHost = await initStandalone({ packageRoot: PACKAGE_ROOT });
+      console.log('[standalone] mini-host at', miniHost.url);
+    } catch (e) {
+      console.error('[standalone] mini-host failed:', e);
+      const { dialog } = electronApi;
+      dialog.showErrorBox('桌宠启动失败', String((e && e.message) || e));
+      app.quit();
+      return;
+    }
+    // 托盘：显示/隐藏 + 退出（独立模式唯一的显式出口，window-all-closed 不杀进程）
+    const { Tray, Menu, nativeImage } = electronApi;
+    standaloneTray = new Tray(nativeImage.createFromPath(path.join(PACKAGE_ROOT, 'assets', 'pic', 'notify-done.png')));
+    standaloneTray.setToolTip('dsh-pet 桌宠');
+    let petsVisible = true;
+    standaloneTray.setContextMenu(
+      Menu.buildFromTemplate([
+        {
+          label: '显示/隐藏宠物',
+          click: () => {
+            petsVisible = !petsVisible;
+            for (const w of windows.values()) {
+              if (petsVisible) w.show();
+              else w.hide();
+            }
+          },
+        },
+        { type: 'separator' },
+        { label: '退出', click: () => app.quit() },
+      ]),
+    );
   }
   console.error(
     '[dsh-pet-desktop-helper] displays: ' +
@@ -1005,5 +1069,6 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  if (STANDALONE) return; // 独立模式：窗口全关不退出，托盘才是唯一显式出口
   app.quit();
 });

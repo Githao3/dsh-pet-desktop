@@ -1022,10 +1022,14 @@ class PetSprite {
     e.preventDefault();
     this.stopThrow(); // 菜单弹出前停住飞行中的宠物
     this.stopMove(); // 菜单悬停期间宠物不漫游
-    // 桌面专属工具根项（打开网站 / 查看余额 / 碎碎念 / 对话 / 回到初始位置）+ 共享菜单树（动作→分类→具体动画）
-    // 碎碎念/对话项默认无条件显示：手动触发不受 whisperEnabled 限制（该字段只影响自动周期轮询）；
-    // 独立版 noLlm=1 时隐藏（设计文档 §2.2 唯一渲染端补丁；noLlm=1 由 mini-host/main.js 注入窗口 URL）
-    const NO_LLM = new URLSearchParams(location.search).get('noLlm') === '1';
+    // 桌面专属工具根项（打开网站 / 查看余额 / 碎碎念[noLlm 时隐藏] / 对话[noLlm 时隐藏] / 回到初始位置）
+    // + 共享菜单树（动作→分类→具体动画）
+    // 碎碎念/对话默认无条件显示：手动触发不受 whisperEnabled 限制（该字段只影响自动周期轮询）。
+    // noLlm 参数的注入方 = main.js createPetWindows 的 loadFile query（仅 STANDALONE 独立模式携带，
+    // 设计文档 §2.2 唯一渲染端补丁）；参数缺失（浏览器/bridge 模式）即回退上游行为；
+    // 第二阶段启用 LLM 后不再注入，两项自动回归。经 constants.js 的全局 params 单次解析（同 BRIDGE 先例）。
+    const NO_LLM = params.get('noLlm') === '1';
+    if (window.__dshPetDebug) window.__dshPetDebug.noLlm = NO_LLM; // 冒烟/排障可观测（constants 先于本文件加载，仍防一手缺失）
     const tools = [{ label: '打开网站', action: 'open-site' }];
     if (this.pet.balanceEnabled) tools.push({ label: '查看余额', action: 'show-balance' });
     if (!NO_LLM) tools.push({ label: '碎碎念', action: 'whisper' }, { label: '对话', action: 'chat' });

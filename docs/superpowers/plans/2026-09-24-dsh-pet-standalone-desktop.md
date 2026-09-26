@@ -74,7 +74,7 @@ npm run start:desktop -- http://127.0.0.1:8231/dsh-pet-7340/config
 
 ### Task 2: standalone-entry.ts（配置聚合 + 桌面宠物清单 + 初始用户配置）
 
-> ✅ 已完成（b1e4c10 → eae8c02 → 1a2f920）。代码以 `src/host/standalone-entry.ts` 审查后版本为准，与本节下列计稿的差异：STARTER_USER_CONFIG 瘦身（只写差异字段+name）、desktopPetList 去掉静默 catch（异常上抛）、本地谓词 isDesktopDisplay 替代 shared 导入、参数名 dataRoot；另补了抛错回归测试。
+> ✅ 已完成（b1e4c10 → eae8c02 → 1a2f95f）。代码以 `src/host/standalone-entry.ts` 审查后版本为准，与本节下列计稿的差异：STARTER_USER_CONFIG 瘦身（只写差异字段+name）、desktopPetList 去掉静默 catch（异常上抛）、本地谓词 isDesktopDisplay 替代 shared 导入、参数名 dataRoot；另补了抛错回归测试。
 
 **Files:**
 - Create: `src/host/standalone-entry.ts`
@@ -386,6 +386,8 @@ git commit -m "build(standalone): rolldown standalone-core.cjs + prepare hook + 
 ---
 
 ### Task 4: mini-host.js（本地 HTTP 迷你宿主）
+
+> ✅ 已完成。计稿实现落地，三处实测补充：① `server.close()` 会等 keep-alive 套接字自己超时（实测 ~3s 才回 close 事件，表现为退出应用白等 3 秒），故 close() 内补 `server.closeAllConnections()`；② 防穿越光用 fetch 看不出真相（undici 先按 WHATWG URL 折叠点段），故测试额外用 `node:http` 直发未规范化的原始路径覆盖 `%2F` 编码版 / 字面 `../..` 版 / `%5C` 版：thumb 命中扩展名白名单 → 400，font、pic 命中 resolveExisting 的 root 前缀检查 → 404，折出前缀之外 → 404，没有一条能读到前缀外文件（安全行为未为测试放宽）；③ 两个新文件都需过 `npx prettier --write`（`runtime/**` 只在 eslint 的 ignores 里，prettier 仍会扫）。
 
 **Files:**
 - Create: `runtime/electron-helper/mini-host.js`

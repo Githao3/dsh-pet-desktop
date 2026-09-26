@@ -85,6 +85,20 @@ if (STANDALONE && !DPI_PROBE && !app.requestSingleInstanceLock()) {
   // 用 exit 不用 quit：quit 不拦 whenReady，第二个实例会先把 mini-host 端口白绑一轮才退
   app.exit(0);
 }
+if (STANDALONE && !DPI_PROBE) {
+  // 抢锁成功的这一侧（已有实例）负责接住第二次启动：给用户一点反馈，而不是让他觉得双击没反应。
+  // 挂在模块级而不等 whenReady：second-instance 可能在窗口还没建完时就到（首实例刚起就被再双
+  // 击一次），此时 windows 还是空 Map，迭代空集合本身就是安全的；反过来若把它挂到 whenReady 里，
+  // 反而多出一个「早期事件没人接」的空窗期。
+  app.on('second-instance', () => {
+    // 二次启动 = 「把宠物亮出来」（设计文档 §4 语义）：不抢焦点（showWithoutFocus，与托盘「显示
+    // 宠物」同一条路径），已显示的窗口再 show 一次无副作用。
+    console.log('[standalone] second instance launched, reveal existing pets (no focus steal).');
+    for (const w of windows.values()) {
+      if (!w.isDestroyed()) w.showWithoutFocus();
+    }
+  });
+}
 if (STANDALONE) {
   // 退出前关掉迷你宿主本地服务（close 幂等且 reject-safe，仍兜一层 catch）
   app.on('before-quit', () => {

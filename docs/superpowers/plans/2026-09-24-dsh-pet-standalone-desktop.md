@@ -765,6 +765,8 @@ git commit -m "feat(standalone): hide whisper/chat menu entries under noLlm=1 (d
 
 ### Task 6: main.js 独立模式接线（启动 + 托盘 + 单实例 + 错误兜底）
 
+> ➕ second-instance 现身语义（补规格 §4“聚焦已有实例”与计划“静默退出”的分歧：托盘已有显隐，二次启动=亮出宠物不抢焦点）
+
 **Files:**
 - Modify: `runtime/electron-helper/main.js`
 

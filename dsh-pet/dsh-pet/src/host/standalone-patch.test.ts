@@ -38,6 +38,12 @@ describe('守卫：main.js 的独立模式接线必须在位（设计文档 §2�
     assert.ok(/STANDALONE && !DPI_PROBE && !app\.requestSingleInstanceLock\(\)/.test(main));
   });
 
+  test('二次启动走 second-instance：已有实例把宠物亮出来（设计文档 §4），不静默零反馈', () => {
+    assert.ok(/app\.on\('second-instance'/.test(main), '第一实例必须接住 second-instance');
+    // 亮出来用 showWithoutFocus（不抢焦点），与托盘「显示宠物」同一条路径
+    assert.ok(/app\.on\('second-instance'[\s\S]{0,300}?showWithoutFocus\(\)/.test(main), '现身不得抢焦点');
+  });
+
   test('托盘是唯一显式出口：window-all-closed 在独立模式不杀进程，before-quit 关迷你宿主', () => {
     assert.ok(/new Tray\(/.test(main), '独立模式必须建托盘');
     assert.ok(

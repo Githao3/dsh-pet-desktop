@@ -115,7 +115,8 @@ function writeDefault(pkgRoot: string, petsJson: string): void {
 
 describe('petPaths', () => {
   test('组装三个路径：包内默认配置 / 用户 main-config / 用户 pet 目录', () => {
-    const p = petPaths('/pkg', '/user/dsh-pet');
+    // 第二参数 = dshHome（~/.dsh 那一层），实现内部再拼 'dsh-pet' 段（与 pet-pack 用例同口径）
+    const p = petPaths('/pkg', '/user');
     assert.equal(p.defaultFile, join('/pkg', 'assets', 'config.jsonc'));
     assert.equal(p.userFile, join('/user', 'dsh-pet', 'main-config.json'));
     assert.equal(p.petDir, join('/user', 'dsh-pet', 'pet'));

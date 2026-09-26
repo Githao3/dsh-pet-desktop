@@ -39,7 +39,10 @@ extraResources:
       - assets/memes/**
       - assets/pic/**
       - assets/webm/**
-      - runtime/electron-helper/standalone-core.cjs
+      # 不再拷 runtime/electron-helper/standalone-core.cjs：require('./standalone-core.cjs') 从
+      # mini-host.js 自身目录解析 = resources/app/ 那份（files: runtime/electron-helper/** 无条件
+      # 收录，含 build 产物）；extraResources 这份 dsh-pet-package/ 副本运行时无人 require，
+      # 还多一个「两份 cjs 可能不同步」的误导面（PACKAGE_ROOT 只供 assets 路径）。
 win:
   target:
     - nsis

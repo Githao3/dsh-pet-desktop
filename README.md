@@ -7,7 +7,7 @@
 - 设计规格：[docs/superpowers/specs/2026-09-24-dsh-pet-desktop-design.md](docs/superpowers/specs/2026-09-24-dsh-pet-desktop-design.md)
 - 实施计划：[docs/superpowers/plans/2026-09-24-dsh-pet-standalone-desktop.md](docs/superpowers/plans/2026-09-24-dsh-pet-standalone-desktop.md)
 - 基座代码：`dsh-pet/`（上游 v0.2.12 zip 快照，改造遵循"上游文件能不改就不改"原则，开发在 `standalone-desktop` 分支）
-- 上游同步：本仓库含 `upstream` remote 指向 PC2005-cloud/dsh-pet；同步 = `git fetch upstream` + merge upstream/main 后重放两处补丁（sprite.js noLlm 菜单门、main.js 独立接线）
+- 上游同步：本仓库含 `upstream` remote 指向 PC2005-cloud/dsh-pet；同步 = `git fetch upstream` + merge upstream/main 后重放全部本地补丁，补丁台账：main.js（独立接线）、sprite.js（noLlm 菜单门）、helper-process.test.ts（electron 解析优先级断言）、eslint.config.js 与 .prettierignore（runtime CJS 豁免）、package.json + scripts/prepare.js（构建串接）、src/host/standalone-patch.test.ts（守卫=补丁台账，merge 后它红就是补丁丢了）
 
 ## 快速开始（开发）
 

@@ -3,7 +3,8 @@
  * 按上游 /dsh-pet-7340/* 路由契约就地应答（渲染端零感知）。
  *
  * 端点策略（设计文档 §2/§3）：
- *   /config            readAllConfig 成品聚合（首次运行先写初始用户层：关余额/桌面显示）
+ *   /config            readAllConfig 成品聚合 + 读时覆盖（balanceEnabled 强制关，见 applyStandaloneOverrides；
+ *                      首次运行先写初始用户层：关余额/桌面显示）
  *   /thumb/<id>/<f>    素材：pet/<id>-animation 专属目录 → 用户 main-animation/webm → 包内 assets/webm
  *   /font/<f> /pic/<f> 包内静态图/字体（pic/memes/* 归 memes 目录，与上游同规则）
  *   /broadcast /work-status /notify   空转（"无事发生"形状，客户端轮询恒定不触发）
@@ -102,6 +103,31 @@ function resolveExisting(root, rel) {
 }
 
 /**
+ * 读时覆盖：对 mergedConfig 的成品聚合就地改写后返回（同一对象）。
+ * 只对 /config 响应生效——用户磁盘上的 main-config.json 一个字节都不动（设计文档 §3.2：
+ * 迷你宿主读配置时注入默认覆盖，不改包内 config.jsonc，更不回写用户文件）。
+ * 必要性：存量用户文件里 balanceEnabled 可能是 true（上游 DSH 环境下的合法配置），
+ * 只在首跑写 starter 拦不住它们；不覆盖的话右键仍出「查看余额」→ /balance 501 → 渲染端
+ * getWithRetry 重试 3 次后抛错记日志，且每 30min（eventsRefreshSec.balance）递归再来一轮。
+ */
+function applyStandaloneOverrides(merged) {
+  for (const entry of Object.values(merged)) {
+    // 第一阶段无凭据管道，设计文档 §3.2 读时覆盖；第二阶段实装凭据后移除
+    if (Array.isArray(entry?.pets)) {
+      for (const pet of entry.pets) {
+        if (pet && typeof pet === 'object') pet.balanceEnabled = false;
+      }
+    }
+  }
+  return merged;
+}
+// 覆盖为何不必落在 initStandalone 的 desktopPetList 上（保持此推导与代码同步）：
+// standalone-entry.ts 的 desktopPetList = flattenPetList(...).filter(display).map(({id,size}))，
+// 注入 env DSH_PET_PETS 的清单只有 id/size 两个字段，balanceEnabled 在其中不存在，
+// 窗口开不开、开多大与余额无关；余额门控的唯一消费路径就是 /config → 覆盖只需挂在 /config。
+// （未来若 desktopPetList 扩字段或菜单改读 env，须回头补这里。）
+
+/**
  * 起迷你宿主。
  * @param packageRoot:string, dshHome?:string, port?:number opts
  *   packageRoot = dsh-pet 包根（assets 所在）；dshHome 缺省 = env DSH_HOME || ~/.dsh
@@ -144,7 +170,8 @@ async function createMiniHost({ packageRoot, dshHome, port = 0 }) {
 
       // 除 font/pic/thumb（前缀下还有子路径，只能按 scope 分流）外，一律整路径精确匹配：
       // /config/meta 这类画蛇添足的子路径落尾部 400，与上游路由表同样不静默受理
-      if (rest === 'config') return json(res, 200, core.mergedConfig(packageRoot, home), true);
+      if (rest === 'config')
+        return json(res, 200, applyStandaloneOverrides(core.mergedConfig(packageRoot, home)), true);
       if (scope === 'font') {
         const f = resolveExisting(join(packageRoot, 'assets', 'fonts'), parts.join('/'));
         return f ? sendFile(res, f) : text(res, 404, 'font not found');
@@ -171,6 +198,9 @@ async function createMiniHost({ packageRoot, dshHome, port = 0 }) {
       }
       if (rest === 'broadcast') return json(res, 200, { ok: true, text: '', ts: 0 }, true);
       if (rest === 'work-status') return json(res, 200, { ts: 0, state: null, task: null }, true);
+      // 与上游 /notify 路由同形状（seq/frames 契约镜像，客户端轮询恒空转）：桌面渲染端今天
+      // 不消费它（系统通知是浏览器侧能力，main.js 走的是 Electron Notification），但保留应答以
+      // 维持路由契约完整——未来渲染端对齐上游或浏览器组件复用 mini-host 时不必先补端点。
       if (rest === 'notify') return json(res, 200, { ok: true, seq: 0, frames: [] }, true);
       // whisper/trigger 与 balance/trigger 同语义：桌面渲染端右键菜单"碎碎念"手动触发走它，
       // 上游是精确路由（非前缀），这里也必须整段命中 501，否则被降级成尾部 400
@@ -239,4 +269,4 @@ async function initStandalone({ packageRoot, dshHome, port = 0 }) {
   return host;
 }
 
-module.exports = { createMiniHost, initStandalone };
+module.exports = { createMiniHost, initStandalone, applyStandaloneOverrides };

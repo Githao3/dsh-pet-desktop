@@ -303,6 +303,27 @@ describe('mini-host endpoints', () => {
     await h2.close();
   });
 
+  test('存量用户配置（balanceEnabled:true）：/config 读时覆盖为 false，磁盘文件一字不改', async () => {
+    // 真实用户场景：装独立版之前 ~/.dsh/dsh-pet/main-config.json 已存在（上游 DSH 环境写的，
+    // 余额合法开启）。starter 存在即跳过碰不到它，若只靠首跑防线则右键仍出「查看余额」→
+    // /balance 501 → 渲染端重试 3 次抛错记日志，每 30min 循环一次（final review R1）。
+    const f = fixture();
+    const userFile = join(f.dshHome, 'dsh-pet', 'main-config.json');
+    mkdirSync(join(f.dshHome, 'dsh-pet'), { recursive: true });
+    const preExisting =
+      '{"pets":[{"id":"main","size":462,"balanceEnabled":true,"display":"desktop","position":{"corner":"top-right","marginX":24,"marginY":100}}]}\n';
+    writeFileSync(userFile, preExisting, 'utf8');
+    // createMiniHost 必须不改动已存在的用户文件（ensureStarterUserConfig 存在即跳过）
+    const host = track(await createMiniHost(f));
+    assert.equal(require('node:fs').readFileSync(userFile, 'utf8'), preExisting, 'starter 改了用户已有文件');
+    const merged = await (await fetch(host.url + '/dsh-pet-7340/config')).json();
+    // 响应里被强制关掉（菜单无「查看余额」，事件轮询不启动）
+    assert.equal(merged.main.pets[0].balanceEnabled, false);
+    // 且仅读时覆盖：磁盘上仍是 true，从未被持久化
+    assert.equal(require('node:fs').readFileSync(userFile, 'utf8'), preExisting, '/config 把覆盖写回了磁盘');
+    await host.close();
+  });
+
   test('initStandalone 成功路径：显式 port 生效，两个环境变量都注入', async () => {
     await withEnvRestore(async () => {
       const f = fixture();

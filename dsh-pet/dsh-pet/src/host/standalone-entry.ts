@@ -23,7 +23,10 @@ export { ID_FORBIDDEN } from './config';
 /** 桌面可见判定（与上游 host/index.ts 本地复制 isDesktopVisible 的既有做法一致：host 半侧不 import shared） */
 const isDesktopDisplay = (display: unknown): boolean => display === 'desktop' || display === 'both';
 
-/** 独立版初始用户配置（第一阶段：只开桌面、先不接 LLM） */
+/** 独立版初始用户配置（第一阶段：只开桌面、先不接 LLM）。
+ *  display:'desktop' 是刻意只给新用户（无已有 main-config.json 才写）的 starter 选择：
+ *  独立版没有 DSH 网页，'web' overlay 无处渲染，'desktop' 才能让首跑就看见宠；
+ *  存量用户文件存在即跳过，永远不会被这里重写。 */
 const STARTER_USER_CONFIG = {
   // 只写与包内默认的差异字段（+name：mergePet 对缺失 name 回退成 id 而非默认名，必须写）；
   // size/position 等由上游合并器填内置默认，上游调默认值时独立版自动跟随。

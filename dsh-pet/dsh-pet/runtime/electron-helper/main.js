@@ -63,6 +63,14 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // 我们的 DPI 缓存与 Chromium profile 都会和别人混在一起。必须赶在任何 getPath('userData') 之前设。
 app.setName('dsh-pet-electron-helper');
 
+// 便携形态用独立 app 名 → 独立 userData / 独立单实例锁身份。electron-builder 的 portable
+// 启动器会注入 PORTABLE_EXECUTABLE_FILE（及 _DIR）指向被双击的那个 exe，只有 portable 版有它。
+// portable 是「拷到哪都能双击跑」的形态，最可能同时并存一个开发实例或安装版实例——若三者共用
+// 同一把锁，双击便携版会静默抢锁失败（无托盘、无窗，用户以为没反应）。给便携形态单独一个名字，
+// 令它与开发/安装版互不阻塞；开发/安装版仍用上面的基础名（二者本就不会同时抢同一 userData）。
+// 必须赶在任何 getPath('userData') 与 requestSingleInstanceLock() 之前设（name 决定 userData 落点）。
+if (process.env.PORTABLE_EXECUTABLE_FILE) app.setName('dsh-pet-electron-helper-portable');
+
 /** DPI 探测子进程模式：不建窗口，只把主屏 scaleFactor 打到 stdout 就退出（见 probePrimaryScale） */
 const DPI_PROBE = process.env.DSH_PET_DPI_PROBE === '1';
 /** 探测进程的输出标记（父进程按它抓值） */
@@ -87,6 +95,13 @@ let petsVisible = true;
 // 必须排除。
 if (STANDALONE && !DPI_PROBE && !app.requestSingleInstanceLock()) {
   console.log('[standalone] another instance is running, quit.');
+  // 打包态没有控制台，光 console.log 用户看不见——双击第二个实例却「没反应」正是投诉点。
+  // 弹一个错误框给个明确出口（showErrorBox 是文档明示「ready 之前也可安全调用」的少数同步对话框之一）。
+  // 只在这个 STANDALONE && !DPI_PROBE 抢锁失败分支弹：桥接/插件/探测模式行为逐字不变。
+  electronApi.dialog.showErrorBox(
+    'dsh-pet 桌宠',
+    '桌宠已在运行（见系统托盘）。\n同一形态只允许一个实例；若是双击便携版没反应，请检查托盘。',
+  );
   // 用 exit 不用 quit：quit 不拦 whenReady，第二个实例会先把 mini-host 端口白绑一轮才退
   app.exit(0);
 }
@@ -96,11 +111,11 @@ if (STANDALONE && !DPI_PROBE) {
   // 击一次），此时 windows 还是空 Map，迭代空集合本身就是安全的；反过来若把它挂到 whenReady 里，
   // 反而多出一个「早期事件没人接」的空窗期。
   app.on('second-instance', () => {
-    // 二次启动 = 「把宠物亮出来」（设计文档 §4 语义）：不抢焦点（showWithoutFocus，与托盘「显示
+    // 二次启动 = 「把宠物亮出来」（设计文档 §4 语义）：不抢焦点（showInactive，与托盘「显示
     // 宠物」同一条路径），已显示的窗口再 show 一次无副作用。
     console.log('[standalone] second instance launched, reveal existing pets (no focus steal).');
     for (const w of windows.values()) {
-      if (!w.isDestroyed()) w.showWithoutFocus();
+      if (!w.isDestroyed()) w.showInactive();
     }
     // 与托盘显隐状态同步：托盘隐藏后二次启动亮窗，不置位的话托盘要连点两次才显示
     petsVisible = true;
@@ -499,7 +514,7 @@ function createPetWindows() {
     setWindowIgnore(win, true);
     // 首帧显示。独立模式下若托盘已经把宠物隐藏（petsVisible=false），新建/重建的窗口不得自己冒出来
     // ——否则「隐藏宠物」会被下一次加载无声推翻。非独立模式 petsVisible 恒为 true，守卫必然通过，
-    // 行为与改动前逐字一致。这里保持 show() 不用 showWithoutFocus：首帧需要真实可见性，抢焦点只在
+    // 行为与改动前逐字一致。这里保持 show() 不用 showInactive：首帧需要真实可见性，抢焦点只在
     // 用户主动亮窗（托盘显示 / second-instance）那条路径上才需要处理。
     win.once('ready-to-show', () => {
       if (STANDALONE && !petsVisible) return;
@@ -705,10 +720,10 @@ app.whenReady().then(async () => {
               // 已销毁的窗口不能再动它（destroy() 与 'closed' 里的 windows.delete 之间有窗口期，
               // 迭代中拿到残留引用就抛）——与广播/热更新那几个循环同一守卫
               if (w.isDestroyed()) continue;
-              // 显示走 showWithoutFocus：宠物窗是 focusable:true（输入框要焦点），show() 会把
+              // 显示走 showInactive：宠物窗是 focusable:true（输入框要焦点），show() 会把
               // 键盘焦点整窗抢过来——用户从托盘点一下「显示宠物」，不该打断他正在打字的窗口。
               // 隐藏不涉及焦点，保持 hide()。
-              if (petsVisible) w.showWithoutFocus();
+              if (petsVisible) w.showInactive();
               else w.hide();
             }
           },

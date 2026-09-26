@@ -10,7 +10,7 @@
  *
  * 断言风格：一律「结构化提取 + 语义断言」（先取出回调体 / 取出所在行，再断言其中出现或未出现
  * 什么调用）。禁止字符距离预算（[\s\S]{0,N}?）与整行签名等值：距离预算会让「加一句注释、多换一行」
- * 就假红，而真正的语义回归（showWithoutFocus 被换成 show）反而可能因为落在预算内而漏判。
+ * 就假红，而真正的语义回归（showInactive 被换成 show）反而可能因为落在预算内而漏判。
  * 这里断的是「语义 = 不抢焦点」，与字符距离无关。
  *
  * 用 Node 内置 test runner（node:test），不引入任何 npm 依赖。
@@ -60,16 +60,53 @@ describe('守卫：main.js 的独立模式接线必须在位（设计文档 §2�
   });
 
   test('二次启动走 second-instance：已有实例把宠物亮出来（设计文档 §4），不静默零反馈', () => {
-    // 提取整段回调再断语义，而不是「相隔 300 字符内必须出现 showWithoutFocus」
+    // 提取整段回调再断语义，而不是「相隔 300 字符内必须出现 showInactive」
     const si = extractHandler(main, 'second-instance');
     assert.ok(si, "第一实例必须接住 second-instance：app.on('second-instance', (…) => {…}) 回调体提取失败");
-    // 亮出来用 showWithoutFocus（不抢焦点），与托盘「显示宠物」同一条路径
-    assert.match(si, /showWithoutFocus\(\)/, 'second-instance 必须把宠物亮出来');
+    // 亮出来用 showInactive（不抢焦点），与托盘「显示宠物」同一条路径
+    assert.match(si, /showInactive\(\)/, 'second-instance 必须把宠物亮出来');
     // 同一回调的反面语义：段内不得出现任何抢焦点/抢层调用（若将来在注释里写下 show() 也会命中，
     // 那是刻意收紧——宁可改注释也不放宽语义）
     assert.doesNotMatch(si, /\.show\(\)|\.focus\(\)|\.moveTop\(\)/, '现身不得抢焦点（禁 show()/focus()/moveTop()）');
     // 与托盘显隐状态同步：不置位的话托盘要连点两次才显示
     assert.match(si, /petsVisible\s*=\s*true/, '亮窗后必须回写 petsVisible');
+  });
+
+  test('现身统一走 showInactive；全文净网：绝不出现 showWithoutFocus（Electron 从无此 API）', () => {
+    // 幻觉兜底：showWithoutFocus 在 Electron 中根本不存在（实测 typeof===undefined），
+    // 调用它只会抛 TypeError——整份 main.js 里一个 token 都不许留（正则覆盖全文件，含注释）。
+    assert.doesNotMatch(main, /\bshowWithoutFocus\b/, 'main.js 仍含 showWithoutFocus（不存在的 API）');
+    // 正例：不抢焦点的现身必须真实调用 showInactive（托盘显示 + second-instance 共用同一条路径）
+    assert.match(main, /\.showInactive\(\)/, '现身必须调用 showInactive()');
+  });
+
+  test('便携形态用独立锁身份：PORTABLE_EXECUTABLE_FILE 命中时的 setName 必须早于抢锁行', () => {
+    // 行序结构化断言（不看字符距离预算）：便携 setName 与基础 setName 是两行，
+    // 只钉「同一行里既有 PORTABLE_EXECUTABLE_FILE 门控、又有 app.setName」的那一行。
+    const lines = main.split('\n');
+    const portableIdx = lines.findIndex((l) => /PORTABLE_EXECUTABLE_FILE/.test(l) && /app\.setName\(/.test(l));
+    const lockIdx = lines.findIndex((l) => l.includes('app.requestSingleInstanceLock()'));
+    assert.ok(portableIdx >= 0, '必须按 PORTABLE_EXECUTABLE_FILE 重设 app 名（便携锁身份隔离）');
+    assert.ok(lockIdx >= 0, '抢锁行必须存在（提取失败）');
+    assert.ok(portableIdx < lockIdx, '便携 setName 必须早于 requestSingleInstanceLock：锁身份要在抢锁前定死');
+    // 独立身份必须与基础名不同名，否则便携/开发/安装版仍共享同一把锁（缺陷未修）
+    assert.match(
+      lines[portableIdx],
+      /setName\(\s*'dsh-pet-electron-helper-portable'\s*\)/,
+      '便携形态必须用独立 app 名（区别于基础名，互不阻塞）',
+    );
+  });
+
+  test('抢锁失败弹框提示（便携版双击没反应的可见出口），仍 app.exit(0)，且只在独立非探测分支', () => {
+    // 结构化提取整个 `if (STANDALONE && !DPI_PROBE && !app.requestSingleInstanceLock()) {…}` 块：
+    // 弹框只许出现在这个（独立、非探测）分支里，插件/桥接/探测模式行为不受影响。
+    const block =
+      main.match(
+        /if \(\s*STANDALONE\s*&&\s*!DPI_PROBE\s*&&\s*!app\.requestSingleInstanceLock\(\)\s*\)\s*\{[\s\S]*?\n\s*\}/,
+      )?.[0] ?? '';
+    assert.ok(block, '抢锁失败分支提取失败（结构须为 if (STANDALONE && !DPI_PROBE && !…Lock()) {…}）');
+    assert.match(block, /showErrorBox/, '抢锁失败必须弹 showErrorBox（不能再静默 exit）');
+    assert.match(block, /app\.exit\(0\)/, '弹框后仍须 app.exit(0)');
   });
 
   test('首帧显示要尊重 petsVisible（托盘隐藏后新窗口不得自己冒出来）', () => {

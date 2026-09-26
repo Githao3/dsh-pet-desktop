@@ -86,6 +86,7 @@ dsh-pet/
 - 退出：新增**系统托盘图标**（右键菜单：显示/隐藏宠物、退出应用）；托盘"退出"→ 关窗、关 HTTP 服务、`app.quit()`
 - 崩溃兜底：渲染端加载配置失败沿用上游行为（界面左上角错误提示 + 5s 重试）
 - 单实例：`app.requestSingleInstanceLock()`，二次启动令已有实例的宠物现身（不抢焦点），绝不产生第二套宠物；聚焦与否非目标
+- 单实例语义（补充）：portable 形态使用独立锁身份（`PORTABLE_EXECUTABLE_FILE` 检测命中时 `app.setName('…-portable')`，赶在抢锁与任何 `getPath('userData')` 之前），与开发/安装版互不阻塞；抢锁失败弹 `dialog.showErrorBox` 提示，不再静默 exit
 
 ## 5. 数据目录与素材管线
 

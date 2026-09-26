@@ -7,7 +7,9 @@
  *   /thumb/<id>/<f>    素材：pet/<id>-animation 专属目录 → 用户 main-animation/webm → 包内 assets/webm
  *   /font/<f> /pic/<f> 包内静态图/字体（pic/memes/* 归 memes 目录，与上游同规则）
  *   /broadcast /work-status /notify   空转（"无事发生"形状，客户端轮询恒定不触发）
- *   /balance* /whisper /chat          501（第一阶段无凭据/无 LLM；第二阶段就地实装）
+ *   /balance* /whisper(/trigger) /chat  501（第一阶段无凭据/无 LLM；第二阶段就地实装）
+ *     精确到 GET /chat：上游 GET /chat 是读 memory.json（读端点，501 才是诚实答案）；
+ *     POST /chat 是写端点，第一阶段先被下面的"非 GET/HEAD → 405"方法门拦下，不会走到 501
  *   非 GET/HEAD 一律 405；Host 非 127.0.0.1[:port] 一律 403（挡 DNS rebinding）
  *
  * 纯 Node（不 require electron）——可被 main.js 同进程调用，也可独立单测。
@@ -170,7 +172,15 @@ async function createMiniHost({ packageRoot, dshHome, port = 0 }) {
       if (rest === 'broadcast') return json(res, 200, { ok: true, text: '', ts: 0 }, true);
       if (rest === 'work-status') return json(res, 200, { ts: 0, state: null, task: null }, true);
       if (rest === 'notify') return json(res, 200, { ok: true, seq: 0, frames: [] }, true);
-      if (rest === 'balance' || rest === 'balance/trigger' || rest === 'whisper' || rest === 'chat') {
+      // whisper/trigger 与 balance/trigger 同语义：桌面渲染端右键菜单"碎碎念"手动触发走它，
+      // 上游是精确路由（非前缀），这里也必须整段命中 501，否则被降级成尾部 400
+      if (
+        rest === 'balance' ||
+        rest === 'balance/trigger' ||
+        rest === 'whisper' ||
+        rest === 'whisper/trigger' ||
+        rest === 'chat'
+      ) {
         return json(res, 501, { error: 'dsh-pet standalone: not available in phase 1 (needs credentials / LLM)' });
       }
       return text(

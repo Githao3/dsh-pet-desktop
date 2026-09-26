@@ -138,6 +138,11 @@ describe('mini-host endpoints', () => {
     assert.equal((await fetch(base + '/thumb/bad%3Aid/x.webm')).status, 400);
     // `bad..id` 只含点号：按上游规则是合法 id（点不是保留字符），无对应素材 → 404，不是 400
     assert.equal((await fetch(base + '/thumb/bad..id/x.webm')).status, 404);
+    // `bad|id` 同理是合法 id：ID_FORBIDDEN = /[\\/:\x00-\x1f]/ 不含 `|`，Node 的 http 解析器
+    // 也接受原样 `|` 路径（实测 rawGet 直发与 fetch 的 %7C 版都能正常进路由），所以请求合法地
+    // 走到 thumb 路由→ resolveExisting 未命中素材 → 404（不存在"parser 先拒"这回事）
+    assert.equal((await fetch(base + '/thumb/bad%7Cid/x.webm')).status, 404);
+    assert.equal((await rawGet(host, '/dsh-pet-7340/thumb/bad|id/x.webm')).status, 404);
     assert.equal((await fetch(base + '/thumb/main/%E4%B8%8D%E5%AD%98%E5%9C%A8.webm')).status, 404);
     // 原始路径直发（绕过客户端折叠）：三种穿越写法都不得命中 packageRoot/assets/config.jsonc。
     // 逐一实测钉死：%2F 编码版解码后 fileName='../../config.jsonc'，扩展名不合法 → 400；
@@ -228,6 +233,20 @@ describe('mini-host endpoints', () => {
       assert.equal((await fetch(base + p)).status, 501, p);
     }
     assert.equal((await fetch(base + '/chat?pet=main')).status, 501);
+    await host.close();
+  });
+
+  test('精确路由补充：/whisper/trigger（菜单手动碎碎念）属 501 组，不被尾部 400 降级', async () => {
+    const { host, base } = await start();
+    // 上游 /whisper/trigger 是与 /whisper 并列的精确路由（GET，渲染端右键菜单"碎碎念"走它），
+    // 实发带 ?pet=<id>；之前只列 whisper 会让它落到尾部 400（语义错：不是请求不合法，是没 LLM）
+    for (const p of ['/whisper/trigger', '/whisper/trigger?pet=main']) {
+      assert.equal((await fetch(base + p)).status, 501, p);
+    }
+    // 与其余 501 同形状：json body（客户端要 res.json()）+ CORS
+    const res = await fetch(base + '/whisper/trigger?pet=main');
+    assert.equal(res.headers.get('access-control-allow-origin'), '*');
+    assert.match((await res.json()).error, /not available in phase 1/);
     await host.close();
   });
 

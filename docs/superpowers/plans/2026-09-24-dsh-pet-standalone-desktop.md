@@ -1,5 +1,7 @@
 # dsh-pet 独立桌面应用 实施计划
 
+> 状态：Task 1–9 完成（standalone-desktop 分支），Task 10 机器侧完成、人工验收进行中。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 dsh-pet 桌面模式从 DSH 宿主解绑，成为可独立启动、可打包为 exe 的 Windows 桌面宠物应用（第一阶段：不接 LLM）。
@@ -30,7 +32,7 @@
 **Files:**
 - 无新增；生成 `node_modules/`、`lib/`、`runtime/electron-helper/shared-core.js`（均为构建产物）
 
-- [ ] **Step 1: 安装依赖（自动触发 prepare 构建 lib + shared-core）**
+- [x] **Step 1: 安装依赖（自动触发 prepare 构建 lib + shared-core）**
 
 ```powershell
 cd d:\Attempt\Qoder\Pet\dsh-pet\dsh-pet
@@ -38,21 +40,21 @@ npm install
 ```
 预期：无报错；`lib/`、`runtime/electron-helper/shared-core.js` 出现。若 prepare 阶段失败，停下排错，不要继续。
 
-- [ ] **Step 2: 跑上游测试套件，确认环境健康**
+- [x] **Step 2: 跑上游测试套件，确认环境健康**
 
 ```powershell
 npm test
 ```
 预期：现有 node:test 全部 pass（这是我们的回归基线）。
 
-- [ ] **Step 3: 下载 Electron**
+- [x] **Step 3: 下载 Electron**
 
 ```powershell
 npm run ensure:electron
 ```
 预期：`~\.dsh\electron\electron.exe` 存在（`Test-Path "$env:USERPROFILE\.dsh\electron\electron.exe"` 为 True）。
 
-- [ ] **Step 4: 基线冒烟——mock 宿主 + 桌宠窗口**
+- [x] **Step 4: 基线冒烟——mock 宿主 + 桌宠窗口**
 
 终端 A：
 ```powershell
@@ -66,7 +68,7 @@ npm run start:desktop -- http://127.0.0.1:8231/dsh-pet-7340/config
 ```
 预期：桌面右上角出现"蓝毛小女仆"，会呼吸、随机做动作、可拖拽。**这一步只是验证环境，产物不提交**（无代码改动，`git status` 应只有未跟踪的构建产物——已被 .gitignore 覆盖则无输出）。
 
-- [ ] **Step 5: 关闭两端进程，记录观察**
+- [x] **Step 5: 关闭两端进程，记录观察**
 
 把冒烟中看到的动画/交互行为记在笔记里，供 Task 10 对照验收。
 
@@ -80,7 +82,7 @@ npm run start:desktop -- http://127.0.0.1:8231/dsh-pet-7340/config
 - Create: `src/host/standalone-entry.ts`
 - Test: `src/host/standalone-entry.test.ts`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 创建 `src/host/standalone-entry.test.ts`：
 
@@ -196,14 +198,14 @@ describe('mergedConfig', () => {
 
 注意：若 `writeDefault` 造的最小夹具因缺 `animations`/`animationWeights` 字段被 readAllConfig 校验报错，就把 pig-config 里那段 animations/weights 块同样补进默认配置 —— 校验语义以上游 config.ts 实测为准，不为迁就测试改上游。
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 ```powershell
 node --experimental-strip-types --import ./scripts/test-register.mjs --test src/host/standalone-entry.test.ts
 ```
 预期：FAIL（Cannot find module ... standalone-entry.ts）。
 
-- [ ] **Step 3: 实现 standalone-entry.ts**
+- [x] **Step 3: 实现 standalone-entry.ts**
 
 ```typescript
 /**
@@ -278,21 +280,21 @@ export function ensureStarterUserConfig(userFile: string): boolean {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 ```powershell
 node --experimental-strip-types --import ./scripts/test-register.mjs --test src/host/standalone-entry.test.ts
 ```
 预期：全部 pass。若 `isDesktopVisible` 的类型不匹配 `String(...)`，改用 `p.display as 'web'|'desktop'|'both'|'none'` 直接传。
 
-- [ ] **Step 5: 全量测试 + 类型检查**
+- [x] **Step 5: 全量测试 + 类型检查**
 
 ```powershell
 npm test; npm run typecheck
 ```
 预期：全绿（新文件进入既有测试网）。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 cd d:\Attempt\Qoder\Pet
@@ -311,7 +313,7 @@ git commit -m "feat(standalone): host config aggregation entry with starter user
 - Modify: `package.json`（scripts 增加一行）
 - Modify: `scripts/prepare.js`（增加 1.7 步）
 
-- [ ] **Step 1: 写构建脚本**（镜像 build-desktop-core.mjs，差异：platform node、格式 cjs）
+- [x] **Step 1: 写构建脚本**（镜像 build-desktop-core.mjs，差异：platform node、格式 cjs）
 
 ```javascript
 #!/usr/bin/env node
@@ -342,13 +344,13 @@ try {
 }
 ```
 
-- [ ] **Step 2: package.json scripts 增加**（在 `"build:desktop-core"` 行后）
+- [x] **Step 2: package.json scripts 增加**（在 `"build:desktop-core"` 行后）
 
 ```json
 "build:standalone-core": "node scripts/build-standalone-core.mjs",
 ```
 
-- [ ] **Step 3: prepare.js 挂链**（在 1.5 desktop-core 块之后、1.6 types 之前插入）
+- [x] **Step 3: prepare.js 挂链**（在 1.5 desktop-core 块之后、1.6 types 之前插入）
 
 ```javascript
 // 1.55 构建独立应用宿主核心（src/host/standalone-entry → CJS，供 electron-helper require）
@@ -361,7 +363,7 @@ if (buildSa.status !== 0) {
 }
 ```
 
-- [ ] **Step 4: 构建并验证产物可 require**
+- [x] **Step 4: 构建并验证产物可 require**
 
 ```powershell
 npm run build:standalone-core
@@ -369,14 +371,14 @@ node -e "const m=require('./runtime/electron-helper/standalone-core.cjs'); conso
 ```
 预期输出：`function,function,function`
 
-- [ ] **Step 5: 仓库根 .gitignore 追加构建产物**
+- [x] **Step 5: 仓库根 .gitignore 追加构建产物**
 
 ```powershell
 cd d:\Attempt\Qoder\Pet
 Add-Content .gitignore "`ndsh-pet/runtime/electron-helper/shared-core.js`ndsh-pet/runtime/electron-helper/standalone-core.cjs`ndsh-pet/dist-desktop/"
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add -A
@@ -397,7 +399,7 @@ git commit -m "build(standalone): rolldown standalone-core.cjs + prepare hook + 
 - Create: `runtime/electron-helper/mini-host.js`
 - Test: `runtime/electron-helper/mini-host.test.js`（新建独立测试入口，不进上游 `src/**` glob）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```javascript
 /**
@@ -510,7 +512,7 @@ describe('mini-host endpoints', () => {
 });
 ```
 
-- [ ] **Step 2: 加测试脚本并确认失败**
+- [x] **Step 2: 加测试脚本并确认失败**
 
 package.json scripts 增加（`"test"` 行后）：
 
@@ -523,7 +525,7 @@ npm run test:standalone
 ```
 预期：FAIL（Cannot find module './mini-host.js'）。
 
-- [ ] **Step 3: 实现 mini-host.js**
+- [x] **Step 3: 实现 mini-host.js**
 
 ```javascript
 /**
@@ -691,21 +693,21 @@ async function initStandalone({ packageRoot }) {
 module.exports = { createMiniHost, initStandalone };
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 ```powershell
 npm run test:standalone
 ```
 预期：6 个 describe 用例全 pass。若 `/thumb/bad..id` 用例 400 不成立（fetch 客户端归一化了 `..`），改用直连 socket 或断言 404——按实际行为修正测试，再改代码。
 
-- [ ] **Step 5: 上游测试回归不受影响**
+- [x] **Step 5: 上游测试回归不受影响**
 
 ```powershell
 npm test
 ```
 预期：全绿（.test.js 不在 src/**.test.ts glob 内）。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 cd d:\Attempt\Qoder\Pet
@@ -720,7 +722,7 @@ git commit -m "feat(standalone): in-process mini host serving upstream /dsh-pet-
 **Files:**
 - Modify: `runtime/electron-helper/sprite.js`（约 L1025-1033 菜单工具项组装处）
 
-- [ ] **Step 1: 打补丁**
+- [x] **Step 1: 打补丁**
 
 原文（约 L1025 起）：
 
@@ -745,7 +747,7 @@ git commit -m "feat(standalone): in-process mini host serving upstream /dsh-pet-
     tools.push({ label: '回到初始位置', action: 'home' });
 ```
 
-- [ ] **Step 2: 回归——DSH/mock 流（无 noLlm 参数）菜单两项仍在**
+- [x] **Step 2: 回归——DSH/mock 流（无 noLlm 参数）菜单两项仍在**
 
 ```powershell
 npm run dev:mock         # 终端 A
@@ -753,7 +755,7 @@ npm run start:desktop -- http://127.0.0.1:8231/dsh-pet-7340/config   # 终端 B
 ```
 右键宠物：应看到「碎碎念」「对话」（无 noLlm 参数 → 原行为）。关闭两进程。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 cd d:\Attempt\Qoder\Pet
@@ -770,7 +772,7 @@ git commit -m "feat(standalone): hide whisper/chat menu entries under noLlm=1 (d
 **Files:**
 - Modify: `runtime/electron-helper/main.js`
 
-- [ ] **Step 1: 文件头（`const { app, ... } = electronApi;` 之后）加独立模式常量与单实例锁**
+- [x] **Step 1: 文件头（`const { app, ... } = electronApi;` 之后）加独立模式常量与单实例锁**
 
 ```javascript
 // ---------- 独立桌宠模式（无 DSH 宿主；设计文档 §2） ----------
@@ -788,7 +790,7 @@ if (STANDALONE && !app.requestSingleInstanceLock()) {
 
 注：main.js 顶部已有 `const path = require('node:path');`（L49，已核实），统一用 `path.join`。`app` 在 L48 从 `electronApi` 解构，位于本段之前。
 
-- [ ] **Step 2: `app.whenReady()` 回调内、创建窗口之前，接线迷你宿主与托盘**
+- [x] **Step 2: `app.whenReady()` 回调内、创建窗口之前，接线迷你宿主与托盘**
 
 在 whenReady 既有逻辑最前插入（若代码结构是 `app.whenReady().then(async () => {...})` 则加 async 体内首行）：
 
@@ -831,7 +833,7 @@ if (STANDALONE && !app.requestSingleInstanceLock()) {
 
 注：`windows` 是 main.js 既有的 `Map<petId, BrowserWindow>`（L482 附近 `windows.delete(pet.id)` 可佐证）；miniHost 已在 Step 1 声明于模块级，这里只赋值。
 
-- [ ] **Step 3: 窗口 loadFile query 注入 noLlm（standalone 限定）**
+- [x] **Step 3: 窗口 loadFile query 注入 noLlm（standalone 限定）**
 
 `createPetWindows()` 里 loadFile 的 query 对象（约 L489）末尾加：
 
@@ -839,7 +841,7 @@ if (STANDALONE && !app.requestSingleInstanceLock()) {
           ...(STANDALONE ? { noLlm: '1' } : {}),
 ```
 
-- [ ] **Step 4: 生命周期兜底（standalone）**
+- [x] **Step 4: 生命周期兜底（standalone）**
 
 先 `Select-String -Path .\runtime\electron-helper\main.js -Pattern 'window-all-closed|before-quit'` 查现状：
 
@@ -856,7 +858,7 @@ if (STANDALONE) {
 }
 ```
 
-- [ ] **Step 5: 手动验证——独立模式启动**
+- [x] **Step 5: 手动验证——独立模式启动**
 
 ```powershell
 $env:DSH_PET_STANDALONE = '1'
@@ -869,7 +871,7 @@ $env:DSH_PET_STANDALONE = '1'
 4. 二次启动（已有实例运行时）不产生第二套宠物
 5. 控制台打印 `[standalone] mini-host at http://127.0.0.1:<port>`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 cd d:\Attempt\Qoder\Pet
@@ -885,7 +887,7 @@ git commit -m "feat(standalone): wire mini-host, tray, single-instance into elec
 - Create: `scripts/start-standalone.mjs`
 - Modify: `package.json`（scripts）
 
-- [ ] **Step 1: 写脚本**（镜像 start-desktop.mjs；差异：不设 configUrl、不设 HOST_PID、注入 STANDALONE=1）
+- [x] **Step 1: 写脚本**（镜像 start-desktop.mjs；差异：不设 configUrl、不设 HOST_PID、注入 STANDALONE=1）
 
 ```javascript
 #!/usr/bin/env node
@@ -932,20 +934,20 @@ const child = spawn(electron, [helperMain], { env, stdio: 'inherit', windowsHide
 child.on('exit', (code, signal) => console.log(`[start-standalone] exited (code=${code}, signal=${signal})`));
 ```
 
-- [ ] **Step 2: package.json scripts 增加**
+- [x] **Step 2: package.json scripts 增加**
 
 ```json
 "start:standalone": "node scripts/start-standalone.mjs",
 ```
 
-- [ ] **Step 3: 端到端验证**
+- [x] **Step 3: 端到端验证**
 
 ```powershell
 npm run start:standalone
 ```
 预期：与 Task 6 Step 5 相同的五项验证全部通过。再验证配置面：改 `~\.dsh\dsh-pet\main-config.json` 的 `corner` 为 `bottom-left`、`size` 为 `300`，重启后生效。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 cd d:\Attempt\Qoder\Pet
@@ -962,7 +964,7 @@ git commit -m "feat(standalone): one-command launcher (npm run start:standalone)
 - Modify: `package.json`（scripts + devDependencies）
 - Modify: `runtime/electron-helper/main.js`（PACKAGE_ROOT 已在 Task 6 支持 app.isPackaged 分支，验证即可）
 
-- [ ] **Step 1: 对齐 Electron 版本并安装 electron-builder**
+- [x] **Step 1: 对齐 Electron 版本并安装 electron-builder**
 
 ```powershell
 & "$env:USERPROFILE\.dsh\electron\electron.exe" --version   # 记为 vX.Y.Z（含 v 前缀，取数字）
@@ -970,7 +972,7 @@ npm add -D electron-builder electron@<X.Y.Z去掉v>
 ```
 预期：安装成功；`npx electron-builder --version` 有输出。
 
-- [ ] **Step 2: 写 electron-builder.yml**
+- [x] **Step 2: 写 electron-builder.yml**
 
 ```yaml
 # 独立桌宠打包配置（设计文档 §7）
@@ -1002,17 +1004,17 @@ nsis:
   allowToChangeInstallationDirectory: true
 ```
 
-- [ ] **Step 3: 补 main.js 打包态资源解析**
+- [x] **Step 3: 补 main.js 打包态资源解析**
 
 Task 6 Step 1 已写 `PACKAGE_ROOT = app.isPackaged ? join(process.resourcesPath, 'dsh-pet-package') : ...`。核对 `createPetWindows` 里 `loadFile('index.html')` 的相对路径解析在打包态是否仍以 helper 目录为基准（Electron 以 appPath 为基准，files 已含整个 helper 目录 → 正确）。**若托盘图标在打包态路径不同步**，检查 `notify-done.png` 是否在 `resources/dsh-pet-package/assets/pic/` 下。
 
-- [ ] **Step 4: package.json scripts 增加**
+- [x] **Step 4: package.json scripts 增加**
 
 ```json
 "dist:desktop": "npm run build:standalone-core && electron-builder --win",
 ```
 
-- [ ] **Step 5: 构建并验证 portable exe**
+- [x] **Step 5: 构建并验证 portable exe**
 
 ```powershell
 npm run dist:desktop
@@ -1020,7 +1022,7 @@ Get-ChildItem .\dist-desktop\*.exe
 ```
 预期：`dsh-pet-desktop <version> portable.exe` 与 NSIS 安装包各一。双击 portable → 出现宠物 + 托盘图标；右键菜单无「碎碎念/对话」；素材加载正常（网络面板不可见，但以动画真实播放为准）；托盘退出后进程清零。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 cd d:\Attempt\Qoder\Pet
@@ -1034,7 +1036,7 @@ git commit -m "build(standalone): electron-builder windows nsis+portable packagi
 
 ### Task 9: 上游同步通道（upstream remote，一次性）
 
-- [ ] **Step 1: 添加 upstream 并抓取（不发 PR、不合并，只留通道）**
+- [x] **Step 1: 添加 upstream 并抓取（不发 PR、不合并，只留通道）**
 
 ```powershell
 cd d:\Attempt\Qoder\Pet
@@ -1044,7 +1046,7 @@ git branch -r --list 'upstream/*' | Select-Object -First 3
 ```
 预期：能看到 upstream/main。此后同步流程 = `git merge upstream/main` + 冲突手工重放（我们的改动集中在新增文件与两处小补丁）。
 
-- [ ] **Step 2: 提交 .git/config 变更说明到 README**
+- [x] **Step 2: 提交 .git/config 变更说明到 README**
 
 在根 README「状态」小节追加一行：
 
@@ -1060,7 +1062,7 @@ git add README.md; git commit -m "docs: upstream sync channel note"; git push
 
 ### Task 10: 全量验收与文档收尾
 
-- [ ] **Step 1: 质量闸门全跑**
+- [x] **Step 1: 质量闸门全跑**
 
 ```powershell
 cd dsh-pet\dsh-pet
@@ -1083,7 +1085,7 @@ npm run test:standalone
 | 5 | 事件动画点播 | 右键 动作→余额档位/碎碎念/工作状态 分类 | 能本地播放预览（不依赖事件源） |
 | 6 | 打包 | portable exe 在无 Node 的目录双击 | 功能与开发流一致 |
 
-- [ ] **Step 3: 根 README 补「快速开始」**
+- [x] **Step 3: 根 README 补「快速开始」**
 
 ```markdown
 ## 快速开始（开发）
@@ -1098,7 +1100,7 @@ npm run start:standalone # 启动桌宠（托盘图标可退出）
 npm run dist:desktop   # 产物在 dsh-pet/dsh-pet/dist-desktop/
 ```
 
-- [ ] **Step 4: 最终提交并推送**
+- [x] **Step 4: 最终提交并推送**
 
 ```powershell
 cd d:\Attempt\Qoder\Pet
@@ -1116,3 +1118,14 @@ git push
 3. **electron-builder asar 关闭**：helper 全链路按纯目录假设写（loadFile 相对路径、nativeImage），打包兼容性优先于体积。
 4. **未签名 exe** SmartScreen 告警：按规格 §9 文档说明处理，不买证书。
 5. **上游 shared-core.js/standalone-core.cjs 为生成物**：新克隆必须 `npm install`（触发 prepare）或显式 `npm run build:desktop-core && npm run build:standalone-core`，start-standalone.mjs 已对 standalone-core 做前置检查。
+
+## 评审遗留台账（非阻断）
+
+以下为各 Task 评审 Carry-over 的小型非阻断项，记录在此供后续阶段参考：
+
+- (a) mini-host 双份 standalone-core.cjs（resources/app 与 dsh-pet-package 各一，运行时用前者；两副本不同步）——源：Task 8 打包评审。
+- (b) helper-process.test 对「~/.dsh 落地路径」优先级的覆盖在装了 electron devDep 的机器上变间接（CI 语义保留）——源：Task 2/7 测试评审。
+- (c) icon-256.png 素材许可归类未明确（对外发布前按设计 §7 复核）——源：Task 8 打包评审。
+- (d) package.json 无 author 字段 → NSIS Publisher 显示异常（改了会增上游 diff，留待用户决定）——源：Task 8 打包评审。
+- (e) 冒烟观测 releaseKeptPosition ~11px 偏移（上游物理时序抖动，非本次引入）——源：Task 6/验收冒烟。
+- (f) 冒烟/验收截图依赖 DPI-aware 裁剪（1.5 缩放直截全屏会错位）——源：Task 8/验收冒烟。

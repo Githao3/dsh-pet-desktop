@@ -63,14 +63,6 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // 我们的 DPI 缓存与 Chromium profile 都会和别人混在一起。必须赶在任何 getPath('userData') 之前设。
 app.setName('dsh-pet-electron-helper');
 
-// 便携形态用独立 app 名 → 独立 userData / 独立单实例锁身份。electron-builder 的 portable
-// 启动器会注入 PORTABLE_EXECUTABLE_FILE（及 _DIR）指向被双击的那个 exe，只有 portable 版有它。
-// portable 是「拷到哪都能双击跑」的形态，最可能同时并存一个开发实例或安装版实例——若三者共用
-// 同一把锁，双击便携版会静默抢锁失败（无托盘、无窗，用户以为没反应）。给便携形态单独一个名字，
-// 令它与开发/安装版互不阻塞；开发/安装版仍用上面的基础名（二者本就不会同时抢同一 userData）。
-// 必须赶在任何 getPath('userData') 与 requestSingleInstanceLock() 之前设（name 决定 userData 落点）。
-if (process.env.PORTABLE_EXECUTABLE_FILE) app.setName('dsh-pet-electron-helper-portable');
-
 /** DPI 探测子进程模式：不建窗口，只把主屏 scaleFactor 打到 stdout 就退出（见 probePrimaryScale） */
 const DPI_PROBE = process.env.DSH_PET_DPI_PROBE === '1';
 /** 探测进程的输出标记（父进程按它抓值） */
@@ -81,6 +73,13 @@ const DPI_MARK = 'dsh-pet-primary-scale:';
 // 而「双击 exe 就是一只独立桌宠」正是打包的唯一用途（验收项：portable exe 在无 Node 的目录双击，
 // 功能与开发流一致），故 app.isPackaged 默认进独立模式；显式 DSH_PET_STANDALONE=0 保留退出这条默认的后门。
 const STANDALONE = process.env.DSH_PET_STANDALONE === '1' || (app.isPackaged && process.env.DSH_PET_STANDALONE !== '0');
+// 便携形态用独立 app 名 → 独立 userData / 独立单实例锁身份。electron-builder 的 portable
+// 启动器会注入 PORTABLE_EXECUTABLE_FILE（及 _DIR）指向被双击的那个 exe，只有 portable 版有它。
+// 诚实说明：这是「形态级」隔离不是「实例级」隔离——多份不同的 portable 拷贝仍共用同一个便携名、
+// 同一把锁、同一个 userData，同时双击两份依旧互斥；隔离的对象是开发/安装版形态（它们与便携版
+// 并存是最常见场景）。仅在 STANDALONE 下改名：桥接/插件形态（上游代码）存储落点逐字不变。
+// 必须赶在任何 getPath('userData') 与 requestSingleInstanceLock() 之前设（name 决定 userData 落点）。
+if (STANDALONE && process.env.PORTABLE_EXECUTABLE_FILE) app.setName('dsh-pet-electron-helper-portable');
 // 包根：开发 = runtime/electron-helper 上两级；打包后 = resources/dsh-pet-package（Task 8 extraResources）
 const PACKAGE_ROOT =
   process.env.DSH_PET_PACKAGE_ROOT ||

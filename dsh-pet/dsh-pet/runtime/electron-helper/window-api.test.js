@@ -7,8 +7,11 @@
  * 钉结构（helper 不经 tsc、Electron 没起来时什么运行时断言都做不了）；这里补上真机一跳，
  * 把「showInactive 是真函数、showWithoutFocus 是幻觉」钉成运行时事实。
  *
- * 由 npm run test:standalone 拉起（见 package.json 的 --test 文件列表）。纯离线：
- * 窗口 show:false + webPreferences.offscreen:true，不依赖任何显示器；子进程 <3s 退出。
+ * 由 npm run test:standalone 拉起（见 package.json 的 --test 文件列表）。探针窗口 show:false
+ * + webPreferences.offscreen:true，但注意 offscreen ≠ headless-proof：Linux 上 Electron 启动
+ * 仍需显示服务器（无 DISPLAY/WAYLAND_DISPLAY 直接 abort），故 headless Linux 整组 skip——
+ * 与 src/host/helper-process.ts hasGraphicalDisplay 的判定口径一致（win32/darwin 放行，
+ * linux 看 DISPLAY/WAYLAND_DISPLAY）。子进程 <3s 退出。
  */
 'use strict';
 const { test } = require('node:test');
@@ -21,7 +24,10 @@ const { tmpdir } = require('node:os');
 // 解析仓库自带的 Electron 可执行文件：在纯 Node 下 require('electron') 直接返回二进制路径
 const electronPath = require('electron');
 
-test('运行时：BrowserWindow 有 showInactive/hide，且 showWithoutFocus 确为幻觉', () => {
+// headless Linux：Electron 起不来（offscreen 也要显示服务器），整组 skip（见顶部注释）
+const headless = process.platform === 'linux' && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY;
+
+test('运行时：BrowserWindow 有 showInactive/hide，且 showWithoutFocus 确为幻觉', { skip: headless }, () => {
   // 临时探针主脚本（.cjs 强制 CommonJS，避开仓库根 type:module）。跑完即删。
   const probe = join(tmpdir(), `dshpet-window-api-${process.pid}-${Date.now()}.cjs`);
   writeFileSync(

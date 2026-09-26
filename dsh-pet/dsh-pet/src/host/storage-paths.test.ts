@@ -131,10 +131,13 @@ describe('profileNameFrom —— 卸载命令里的 profile 名', () => {
 });
 
 describe('DESKTOP_APP_NAME —— 与桌面端实际应用名防漂移', () => {
-  test('与 runtime/electron-helper/main.js 的 app.setName 一致', () => {
+  test('与 runtime/electron-helper/main.js 的 app.setName 集合一致（matchAll 全量枚举）', () => {
     const src = readFileSync(new URL('../../runtime/electron-helper/main.js', import.meta.url), 'utf8');
-    const m = /app\.setName\(\s*['"]([^'"]+)['"]\s*\)/.exec(src);
-    assert.ok(m, 'main.js 里没有找到 app.setName');
-    assert.equal(m[1], DESKTOP_APP_NAME);
+    // 首匹配会漏：main.js 现在有两个 setName（基础名 + 便携名），只断第一个则便携名怎么改都绿。
+    // 这里枚举全部实参，断恰好等于已知集合（无关顺序），新增/改名/漏改都会红。
+    const names = [...src.matchAll(/app\.setName\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]).sort();
+    assert.deepEqual(names, ['dsh-pet-electron-helper', 'dsh-pet-electron-helper-portable']);
+    // 设置页展示的是基础形态的缓存目录名，必须在那份集合里（缺了它，条目永远指向不存在的目录）
+    assert.ok(names.includes(DESKTOP_APP_NAME), 'DESKTOP_APP_NAME 必须是 main.js 实际应用名之一');
   });
 });

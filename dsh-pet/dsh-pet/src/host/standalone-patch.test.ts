@@ -49,7 +49,14 @@ describe('守卫：main.js 的独立模式接线必须在位（设计文档 §2�
     // 只钉「await + 对象实参里有 packageRoot 这一项」：实参怎么写（换行、加 dshHome/port、改属性
     // 顺序）都不敏感，initStandalone 的签名扩展不会让守卫假红
     assert.match(main, /await initStandalone\(\s*\{[^}]*\bpackageRoot\b/, '必须 await 总装');
-    assert.match(main, /showErrorBox/, '启动失败必须弹错误框');
+    // 钉到mini-host启动失败那一次调用自己的标题（main.js: dialog.showErrorBox('桌宠启动失败', …)）：
+    // 若只断 /showErrorBox/，抢锁失败分支那弹（标题「dsh-pet 桌宠」）会空转满足断言——
+    // 删掉启动失败弹框守卫照样绿，这里防的就是这个虚接。
+    assert.match(
+      main,
+      /showErrorBox\(\s*'桌宠启动失败'/,
+      '启动失败必须弹专属错误框（钉标题，不接受抢锁失败那弹的虚接）',
+    );
   });
 
   test('单实例锁必须排除 DPI 探测子进程（探测子进程继承 env，抢锁必失败自杀 → 永远探不到值）', () => {

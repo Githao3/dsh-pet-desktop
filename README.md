@@ -30,6 +30,7 @@ npm run dist:desktop     # 产物在 dsh-pet/dsh-pet/dist-desktop/（portable + 
 - 桌宠数据目录：`~/.dsh/dsh-pet/`（main-config.json 配置、main-animation/webm 覆盖素材、pet/ 新种类），与上游文档完全一致——上游 README 的素材管线（prompts/ + scripts/ 生成自家角色）在独立版原样可用
 - 第一阶段限制：无对话/碎碎念/余额（无 LLM/凭据，右键入口已隐藏；事件动画可在右键「动作」子树手动点播预览）；开机自启未做
 - 开发注意：`dist-desktop/`、`temp/`、`electron-builder-cache/` 已 gitignore；`ELECTRON_BUILDER_CACHE` 必须在 ESM 包目录之外（见 electron-builder.yml 注释）
+- 完整独立验收需同时跑 `npm test`（main.js 源码守卫等在其中）与 `npm run test:standalone`（standalone-core 构建 + mini-host 单测 + Electron 运行时净网），缺一不可
 
 ## 许可与署名
 

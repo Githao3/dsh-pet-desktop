@@ -1,10 +1,14 @@
-# 依赖与构建产物
+# ── 依赖与通用构建产物 ──
 node_modules/
 lib/
 dist/
 *.tsbuildinfo
+*.tgz
+npm-debug.log*
+.npm-cache/
+.npm-tmp-cache/
 
-# 素材链中间产物（上游脚本生成）
+# ── 素材链中间产物（跑 scripts/ 可再生，不入仓库）──
 step01/
 step02/
 step03/
@@ -12,26 +16,33 @@ step04/
 pr/
 prproj/
 .tools/
+__pycache__/
+*.py[cod]
+.venv/
+.uv-cache/
 
-# 源视频（大文件，按需走 GitHub Releases / git-lfs）
+# ── 素材源视频（托管在 GitHub Releases assets-videos，不入仓库）──
 video/*.mp4
 
-# Electron 下载缓存与打包产物
+# ── 插件项目构建产物（dsh-pet/，均由 npm 生命周期生成）──
+dsh-pet/runtime/electron-helper/shared-core.js
+dsh-pet/runtime/electron-helper/standalone-core.cjs
+
+# ── 独立桌面版打包产物与缓存 ──
+dsh-pet/dist-desktop/
 dsh-pet-desktop-*.exe
 *.blockmap
 electron-builder-cache/
 
-# 独立桌面应用的构建产物（均由 npm run prepare 生成，不入库）
-# 注：包体在 dsh-pet/dsh-pet/，所以路径要带两层 dsh-pet（单层的写法匹配不到任何东西）
-dsh-pet/dsh-pet/runtime/electron-helper/shared-core.js
-dsh-pet/dsh-pet/runtime/electron-helper/standalone-core.cjs
-dsh-pet/dsh-pet/dist-desktop/
+# ── 本地工作目录 ──
+temp/
 
-# 系统与编辑器
+# ── 系统与编辑器 ──
+.DS_Store
 Thumbs.db
-Desktop.ini
+desktop.ini
 .vscode/
 .idea/
 
-# AI 工作过程产物（设计规格/实施计划），仅本地保留不入库
+# ── AI 工作过程产物（设计规格/实施计划），仅本地保留不入库 ──
 docs/

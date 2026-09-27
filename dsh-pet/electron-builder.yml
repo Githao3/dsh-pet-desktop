@@ -2,7 +2,7 @@
 #
 # 打包缓存坑（实际踩到）：electron-builder 把 winCodeSign / nsis / icons 解压到自己的缓存
 # （默认 %LOCALAPPDATA%\electron-builder\Cache）。若为了离线用 ELECTRON_BUILDER_CACHE 把它指进仓库，
-# 必须指到 dsh-pet/dsh-pet **之外**（例如工作区根 electron-builder-cache/，已被 .gitignore 覆盖）：
+# 必须指到 dsh-pet **之外**（例如工作区根 electron-builder-cache/，已被 .gitignore 覆盖）：
 # 本包 package.json 是 "type": "module"，缓存在包内时 electron-builder 那个 CJS 的 icon-tool.js
 # 会被 Node 当 ESM 执行 → ReferenceError: require is not defined in ES module scope。
 appId: com.local.dsh-pet-desktop

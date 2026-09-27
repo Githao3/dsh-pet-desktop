@@ -4,7 +4,7 @@
 
 ## 状态
 
-- 预编译成品（安装版 / 解压版）见 GitHub Releases；0.2.12 的**便携版是坏包**（缺素材，见「已知事项」），待下个构建替换
+- 预编译成品（安装版 / 解压版 / 便携版）见 GitHub Releases（v0.2.13-desktop 起）
 - 基座代码：`dsh-pet/`（上游 v0.2.12 zip 快照，改造遵循"上游文件能不改就不改"原则，已在 `master`）
 - 上游同步：本仓库含 `upstream` remote 指向 PC2005-cloud/dsh-pet；同步 = `git fetch upstream` + merge upstream/main 后重放全部本地补丁，补丁台账：main.js（独立接线）、sprite.js（noLlm 菜单门 + 素材加载失败可见性报错条）、helper-process.test.ts（electron 解析优先级断言）、eslint.config.js 与 .prettierignore（runtime CJS 豁免）、package.json + scripts/prepare.js（构建串接）、electron-builder.yml（关 `preCompressedFileExtensions`，修便携版漏素材）、scripts/check-desktop-artifact.js（产物体检门禁）、src/host/standalone-patch.test.ts（守卫=补丁台账，merge 后它红就是补丁丢了）
 
@@ -105,7 +105,7 @@ python encode_thumbs.py      # 转码 640×360 播放变体 → step04/
 
 ## 已知事项
 
-- 便携版（portable 单文件 exe）**已发布到 Releases 的 0.2.12 是已知坏包**：electron-builder 26.15.3 让 nsis 与 portable 共用同一份 app 归档缓存，而默认 `nsis.preCompressedFileExtensions` 把 `.webm` 排除在该归档之外、改由 NSIS `File` 指令另投——portable 分支恰好跳过这步投递，106 个动画素材一个都没进 payload（exe 少 54MB），运行期所有视频加载失败 → 透明窗口什么都不显示（即此前报的「窗口隐形」，与渲染无关，是包内没素材）。**请勿分发/使用该 Release 资产**：要么替换成完整构建、要么在 Releases 上标坏；修复已在 master，随下一个构建发布（`electron-builder.yml` 关分流 + `scripts/check-desktop-artifact.js` 门禁兜底，漏素材直接非零退出）。安装版与解压版不受影响
+- 便携版历史坑（已解决）：0.2.12 便携版因 electron-builder 26.15.3 的 `preCompressedFileExtensions` 分流机制丢失全部 106 个 webm 素材（窗口隐形无画面），已从 Releases 撤下。修复随 0.2.13 发布：`electron-builder.yml` 关分流 + `scripts/check-desktop-artifact.js` 构建后产物门禁（漏素材直接非零退出）+ sprite.js 素材加载失败时点亮错误提示条
 - 未签名 exe：Windows SmartScreen 首次运行会弹「已保护你的电脑」提示，点「更多信息 → 仍要运行」
 - 第一阶段限制：无对话/碎碎念/余额（无 LLM/凭据，右键入口已隐藏；事件动画可在右键「动作」子树手动点播预览）；开机自启未做
 - 开发注意：`dist-desktop/`、`temp/`、`electron-builder-cache/` 已 gitignore；`ELECTRON_BUILDER_CACHE` 必须在 ESM 包目录之外（见 electron-builder.yml 注释）

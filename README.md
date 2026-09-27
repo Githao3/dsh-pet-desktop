@@ -26,6 +26,7 @@ npm run dist:desktop     # 产物在 dsh-pet/dsh-pet/dist-desktop/（portable + 
 
 ## 已知事项
 
+- 便携版（portable 单文件 exe）存在窗口隐形问题（内容不渲染），安装版与解压版不受影响；预编译产物见 GitHub Releases
 - 未签名 exe：Windows SmartScreen 首次运行会弹「已保护你的电脑」提示，点「更多信息 → 仍要运行」
 - 桌宠数据目录：`~/.dsh/dsh-pet/`（main-config.json 配置、main-animation/webm 覆盖素材、pet/ 新种类），与上游文档完全一致——上游 README 的素材管线（prompts/ + scripts/ 生成自家角色）在独立版原样可用
 - 第一阶段限制：无对话/碎碎念/余额（无 LLM/凭据，右键入口已隐藏；事件动画可在右键「动作」子树手动点播预览）；开机自启未做

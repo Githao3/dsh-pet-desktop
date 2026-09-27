@@ -1074,7 +1074,7 @@ npm run test:standalone
 ```
 预期：全绿。（`format` 只应格式化我们的新文件；若它改动上游文件，`git checkout` 回退对上游文件的格式化并加入 .prettierignore。）
 
-- [ ] **Step 2: 对照规格 §8 逐项验收（人工清单）**
+- [x] **Step 2: 对照规格 §8 逐项验收（人工清单）**——用户实测 2026-09-27：项 1–5 通过（开发流 + Setup 安装版 + win-unpacked 解压版均正常，含托盘显隐/单实例弹框）；项 6 **便携版未过**（窗口存在但内容不渲染，隐形在右上角），用户决定绕过，用 Setup/解压版，见台账 (g)。
 
 | # | 验收项 | 操作 | 通过标准 |
 |---|--------|------|---------|
@@ -1083,7 +1083,7 @@ npm run test:standalone
 | 3 | 生命周期 | 托盘退出；重复启动 | 进程清零；不出第二套 |
 | 4 | 配置面 | 改 main-config.json size/corner；放一个同名 webm 到 `~\.dsh\dsh-pet\main-animation\webm\` | 重启生效；用户素材优先于包内 |
 | 5 | 事件动画点播 | 右键 动作→余额档位/碎碎念/工作状态 分类 | 能本地播放预览（不依赖事件源） |
-| 6 | 打包 | portable exe 在无 Node 的目录双击 | 功能与开发流一致 |
+| 6 | 打包 | portable exe 在无 Node 的目录双击 | 功能与开发流一致 ⚠️未过，见台账(g) |
 
 - [x] **Step 3: 根 README 补「快速开始」**
 
@@ -1129,3 +1129,4 @@ git push
 - (d) package.json 无 author 字段 → NSIS Publisher 显示异常（改了会增上游 diff，留待用户决定）——源：Task 8 打包评审。
 - (e) 冒烟观测 releaseKeptPosition ~11px 偏移（上游物理时序抖动，非本次引入）——源：Task 6/验收冒烟。
 - (f) 冒烟/验收截图依赖 DPI-aware 裁剪（1.5 缩放直截全屏会错位）——源：Task 8/验收冒烟。
+- (g) **portable 单文件 exe 窗口隐形**（未解决，用户选择绕过）：窗口存在且位置正确（右上角，鼠标悬停变手型）但内容不渲染；同一构建的 win-unpacked 与 Setup 安装版均正常，Debug 子代理已排除锁冲突/stale 产物/DPI 探针/越屏四类假设，剩 GPU 合成器对临时目录解码环境的渲染层差异未查。第二阶段若分发 portable 需先解决——源：用户验收 2026-09-27。

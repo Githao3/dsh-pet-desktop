@@ -55,3 +55,13 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  # 便携版「隐形窗口」真因（0.2.12 实测：portable exe 里 106 个 .webm 一个都没有，54MB 蒸发）：
+  # electron-builder 默认把 .webm 之类已压缩素材从 app-64.7z 里**排除**（7z -x!*.webm），改为
+  # 用 NSIS 自己的 File 指令另存一份（preCompressedFileExtensions 的本职）。而 portable 与 nsis
+  # 共用同一个 AppPackageHelper.archToResult 缓存（只按 arch 记，不按 target 记，见
+  # app-builder-lib/out/targets/nsis/nsisUtil.js），portable 拿到的就是这份「不含 webm」的归档，
+  # 偏偏 portable 分支又整体跳过 generateForPreCompressed（NsisTarget.js 里 if (isPortable) return）
+  # —— 两条投递路径同时落空，素材就这么静默消失了（同一次构建即可复现，与并发构建无关）。
+  # 置 null 关掉这套「预压缩素材分流」：webm 直接进 7z 归档，两个产物共用同一份完整 payload。
+  # 代价只是构建时对本来已压缩的视频多跑一遍 LZMA（体积几乎不变），换来的是不再可能漏素材。
+  preCompressedFileExtensions: null

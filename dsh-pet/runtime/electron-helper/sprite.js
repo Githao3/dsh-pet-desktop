@@ -369,6 +369,7 @@ class PetSprite {
     const loadGuard = (why) => {
       if (!this.pending || this.pending.gen !== gen) return;
       this.pending = null;
+      this.noteAssetLoadFailure(why);
       console.warn('[dsh-pet] 素材加载失败 pet=' + this.pet.id + ' anim=' + next + '：' + why + '（已释放本次切换）');
     };
     const loadTimer = window.setTimeout(() => loadGuard('10s 超时'), 10000);
@@ -382,6 +383,7 @@ class PetSprite {
       window.clearTimeout(loadTimer);
       el.onerror = null;
       if (this.pending && this.pending.gen !== gen) return;
+      this.clearAssetLoadFailure();
       const old = this.front === 0 ? this.videoA : this.videoB;
       el.classList.add('is-front');
       if (old && old !== el) {
@@ -402,6 +404,41 @@ class PetSprite {
     };
     el.addEventListener('loadeddata', onReady);
     if (el.readyState >= 2) onReady();
+  }
+
+  /**
+   * 素材整体缺失时的桌面可见性（defense-in-depth）。
+   *
+   * 坑（0.2.12 便携版隐形窗口）：payload 里 assets/webm 一个文件都没有时，本文件原有
+   * 的兜底只 console.warn——桌面窗口完全透明，一个素材都放不出来就等于「什么都不显示」，
+   * 用户看不到任何异常。故连续失败到阈值就把 renderer.js 配置错误用的 #pet-error 面板
+   * 点亮（同一 DOM 节点、同一 .visible 开关，不新增样式），并把素材源 BASE（含 mini-host
+   * 端口）写进文案，让人一眼能判断是「包没打全」还是「宿主没起来」。
+   * 阈值取 3：单次超时/网络抖动不该惊动用户，但素材缺失是必然连败（每次切动画都失败）。
+   */
+  noteAssetLoadFailure(why) {
+    this.assetFailures = (this.assetFailures || 0) + 1;
+    window.__dshPetDebug.assetFailures = this.assetFailures;
+    if (this.assetFailures < 3 || this.assetErrorShown) return;
+    this.assetErrorShown = true;
+    errorEl.textContent =
+      'dsh-pet 素材加载失败（连续 ' +
+      this.assetFailures +
+      ' 次，最近一次：' +
+      why +
+      '）。多半是安装包里没有 assets/webm（便携版素材缺失），请换完整构建；素材源：' +
+      BASE;
+    errorEl.classList.add('visible');
+  }
+
+  /** 一旦有动画成功就位即视为恢复：计数归零，之前点亮的素材错误条自动撤下 */
+  clearAssetLoadFailure() {
+    this.assetFailures = 0;
+    window.__dshPetDebug.assetFailures = 0;
+    if (!this.assetErrorShown) return;
+    this.assetErrorShown = false;
+    errorEl.classList.remove('visible');
+    errorEl.textContent = '';
   }
 
   playOnce(name) {

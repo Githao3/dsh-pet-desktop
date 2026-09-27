@@ -32,3 +32,6 @@ Thumbs.db
 Desktop.ini
 .vscode/
 .idea/
+
+# AI 工作过程产物（设计规格/实施计划），仅本地保留不入库
+docs/

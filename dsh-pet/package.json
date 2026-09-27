@@ -31,7 +31,7 @@
     "files —— npm publish 只发这些目录/文件（assets/webm 播放资源（VP9-alpha，浏览器 Chrome/Edge/Firefox 与桌面模式共用）；Safari/HEVC 兼容由仓库流水线支持、fork 定制，不随包发布；assets/preview 的 GIF 仅 README 展示、不入包）",
     "scripts.encode:webm —— 转码管线（step03 母版 → assets/webm 640×360 VP9-alpha）",
     "scripts.prepack —— 发布前自动检查链：types/typecheck/lint/format → prepack-check（素材健康检查）；不构建（构建由 prepare 钩子负责）",
-    "scripts.dist:desktop —— 末尾挂 scripts/check-desktop-artifact.js 产物体检：便携版 exe 内部 .webm 数量/素材体积差不过关就非零退出（0.2.12 曾静默产出零素材的便携版）",
+    "scripts.dist:desktop —— 末尾挂 scripts/check-desktop-artifact.js 产物体检：只认文件名含当前版本的 exe，便携版 exe 内部 .webm 数量/素材体积差不过关就非零退出（0.2.12 曾静默产出零素材的便携版）",
     "scripts.prepare —— npm 生命周期钩子（npm install / npm publish 自动执行，也可手动 npm run prepare）：构建完整产物 + files 收敛",
     "peerDependencies —— 运行时由宿主（DSH）提供的模块，本包不打包它们",
     "================================================"

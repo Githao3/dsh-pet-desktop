@@ -36,6 +36,20 @@ const lineWith = (src: string, needle: string): string => src.split('\n').find((
 const extractHandler = (src: string, event: string): string =>
   src.match(new RegExp(`app\\.on\\('${event}',\\s*\\([^)]*\\)\\s*=>\\s*\\{[\\s\\S]*?\\n\\s*\\}\\);`))?.[0] ?? '';
 
+/**
+ * 提取箭头函数回调体（含声明行）：从 `const <name> = (…) => {` 到其后第一个「独占一行、
+ * 任意缩进的 };」。回调体多长都不敏感（往里头加注释/换行/语句都照样整段提出）。
+ */
+const extractArrow = (src: string, name: string): string =>
+  src.match(new RegExp(`^\\s*const ${name} = \\([^)]*\\)\\s*=>\\s*\\{[\\s\\S]*?^\\s*\\};`, 'm'))?.[0] ?? '';
+
+/**
+ * 提取类方法体（含签名行）：从 `  <name>(…) {` 到下一个「两空格缩进的 }」（内层语句是 4 空格，
+ * 故终止边界唯一）。同 extractArrow：只看语义，不看行距/字符距离。
+ */
+const methodBody = (src: string, name: string): string =>
+  src.match(new RegExp(`^  ${name}\\([^)]*\\)\\s*\\{[\\s\\S]*?^  \\}`, 'm'))?.[0] ?? '';
+
 describe('守卫：main.js 的独立模式接线必须在位（设计文档 §2）', () => {
   const main = readSource(helper + 'main.js');
 
@@ -160,6 +174,92 @@ describe('守卫：sprite.js 的 noLlm 消费走全局 params（Task 5 评审遗
     assert.ok(line, '__dshPetDebug.noLlm 必须存在');
     assert.match(line, /if \(window\.__dshPetDebug\)/, '钩子必须防一手缺失（不裸赋值）');
     assert.match(line, /=\s*NO_LLM/, '挂的必须是 NO_LLM 本身');
+  });
+});
+
+describe('守卫：sprite.js 的素材缺失错误条（0.2.12 便携版隐形窗口的可见性兜底）', () => {
+  // 这一整块兜底在 helper 里（不经 tsc、Electron 不起来什么断言都做不了），而它本身就是
+  // 「构建成功但产物坏」的最后一道可见出口——出口自已在不在位只能读源码钉：
+  // 0.2.12 那轮它恰好存在却永不触发（阈值不可达），所以只钉「有调用」不够，阈值语义也得钉住。
+  const sprite = readSource(helper + 'sprite.js');
+
+  test('switchTo 的加载兜底两头都接线：失败上报 noteAssetLoadFailure / 成功复位 clearAssetLoadFailure', () => {
+    const guard = extractArrow(sprite, 'loadGuard');
+    assert.ok(guard, 'loadGuard 回调体提取失败（结构须为 const loadGuard = (why) => {…}）');
+    assert.match(guard, /this\.pending = null;/, '兜底必须先释放 pending（否则相同目标会被防重分支吞掉）');
+    assert.match(
+      guard,
+      /this\.noteAssetLoadFailure\(why\)/,
+      '兜底必须把失败上报给错误条（只 console.warn 就是隐形窗口）',
+    );
+    // 两条失败路径（10s 超时 / video error 事件）都得进同一个兜底，缺一即半边失效
+    const calls = [...sprite.matchAll(/loadGuard\(/g)].length;
+    assert.ok(calls >= 2, 'loadGuard 必须被超时与 onerror 两条路径共同调用（两处调用一个都不能少）');
+    const ready = extractArrow(sprite, 'onReady');
+    assert.ok(ready, 'onReady 回调体提取失败');
+    assert.match(ready, /this\.clearAssetLoadFailure\(\)/, '成功就位必须复位计数（否则一次偶发失败永久滞留）');
+  });
+
+  test('错误条复用 #pet-error 的 .visible 开关（不新增样式），文案带素材源与两条可能成因', () => {
+    const fn = methodBody(sprite, 'noteAssetLoadFailure');
+    assert.ok(fn, 'noteAssetLoadFailure 方法体提取失败（必须存在且在类上）');
+    assert.match(
+      fn,
+      /errorEl\.classList\.add\('visible'\)/,
+      '必须点亮 #pet-error（与 renderer.js 配置错误同一节点、同一开关）',
+    );
+    assert.match(fn, /BASE/, '文案必须带素材源 BASE（含 mini-host 端口：能区分「包没打全」与「宿主没起来」）');
+    assert.match(fn, /assets\/webm/, '文案必须点名 assets/webm（便携版事故的准确形态）');
+    assert.match(
+      fn,
+      /用户目录覆盖素材损坏/,
+      '文案还须提到用户目录覆盖素材损坏（mini-host /thumb 的回退链不止包内一处）',
+    );
+    assert.match(fn, /window\.__dshPetDebug\.assetFailures\s*=/, '失败计数必须挂上 __dshPetDebug（冒烟断言可观测）');
+  });
+
+  test('阈值按 everAssetOk 分档：从未成功加载过 ⇒ 首次失败即点亮（绝不残留写死的连败 <3）', () => {
+    const fn = methodBody(sprite, 'noteAssetLoadFailure');
+    assert.ok(fn, 'noteAssetLoadFailure 方法体提取失败');
+    assert.match(fn, /this\.assetFailures\s*(\+=\s*1|=\s*\(this\.assetFailures[^)]*\)\s*\+\s*1)/, '必须自增失败计数');
+    assert.match(
+      fn,
+      /everAssetOk\s*\?\s*3\s*:\s*1/,
+      '阈值必须是 everAssetOk ? 3 : 1（没成功过 ⇒ 1：素材缺失时动画链走不下去，连败永远攒不满）',
+    );
+    // 反面：写死的 <3 就是旧版不可达阈值（那句「每次切动画都失败、总能攒够 3 次」的注释是错的）
+    assert.doesNotMatch(fn, /<\s*3\b/, '不得残留写死的连败阈值 <3');
+    assert.doesNotMatch(sprite, /必然连败/, '过时注释「必然连败」（阈值不可达的根源）不得重现');
+  });
+
+  test('已点亮后再失败只刷新文案里的次数（不重加 class、不重排 DOM）', () => {
+    const fn = methodBody(sprite, 'noteAssetLoadFailure');
+    assert.match(fn, /const msg =/, '文案先成形（点亮与后续刷新共用同一份）');
+    assert.match(
+      fn,
+      /if \(this\.assetErrorShown\)\s*\{[\s\S]*?errorEl\.textContent[\s\S]*?return;/,
+      'assetErrorShown 为真时必须走「只更新 textContent 再 return」的廉价分支',
+    );
+    // 点亮分支只能在首次：add('visible') 必须在 assetErrorShown 的早退之后（全文件只这一处 add）
+    const adds = [...sprite.matchAll(/errorEl\.classList\.add\('visible'\)/g)].length;
+    assert.equal(adds, 1, "noteAssetLoadFailure 里的 classList.add('visible') 必须唯一（刷新分支不得重加）");
+  });
+
+  test('恢复路径：置 everAssetOk + 计数归零，且只在错误条由本方法点亮时才收起（不误藏配置错误条）', () => {
+    const fn = methodBody(sprite, 'clearAssetLoadFailure');
+    assert.ok(fn, 'clearAssetLoadFailure 方法体提取失败');
+    assert.match(fn, /this\.everAssetOk\s*=\s*true/, '成功就位必须登记 everAssetOk（否则阈值永远停在 1）');
+    assert.doesNotMatch(fn, /everAssetOk\s*=\s*false/, 'everAssetOk 是单向棘轮（成功过就永不回退）');
+    assert.match(fn, /this\.assetFailures\s*=\s*0/, '计数必须归零');
+    assert.match(
+      fn,
+      /if \(!this\.assetErrorShown\) return;/,
+      '收起前先过 assetErrorShown 守卫：#pet-error 与 renderer.js 配置错误条同节点，不是自己点亮的就不能替它藏',
+    );
+    const guardIdx = fn.indexOf('if (!this.assetErrorShown) return;');
+    const removeIdx = fn.indexOf("errorEl.classList.remove('visible')");
+    assert.ok(removeIdx > 0, '必须真的收起（classList.remove 缺失）');
+    assert.ok(guardIdx < removeIdx, '守卫必须先于收起动作');
   });
 });
 

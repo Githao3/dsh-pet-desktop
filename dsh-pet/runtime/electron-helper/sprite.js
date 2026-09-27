@@ -70,6 +70,12 @@ class PetSprite {
     this.anim = this.animations.idle[0] ?? '';
     this.once = true;
     this.facing = 'left';
+    // 素材加载兜底（见 noteAssetLoadFailure / clearAssetLoadFailure）：连败计数、错误条是否
+    // 已由本方法点亮、本会话是否成功加载上过素材（决定阈值分档）。三个字段成组初始化，
+    // 不靠 `this.x || 0` 那种惰性写法——读代码的人得能在构造函数里看到全貌。
+    this.assetFailures = 0;
+    this.assetErrorShown = false;
+    this.everAssetOk = false;
     // 交互/移动
     this.dragState = { active: false, dragging: false, sx: 0, sy: 0, petX: 0, petY: 0 };
     this.justDragged = false;
@@ -411,28 +417,45 @@ class PetSprite {
    *
    * 坑（0.2.12 便携版隐形窗口）：payload 里 assets/webm 一个文件都没有时，本文件原有
    * 的兜底只 console.warn——桌面窗口完全透明，一个素材都放不出来就等于「什么都不显示」，
-   * 用户看不到任何异常。故连续失败到阈值就把 renderer.js 配置错误用的 #pet-error 面板
+   * 用户看不到任何异常。故失败到阈值就把 renderer.js 配置错误用的 #pet-error 面板
    * 点亮（同一 DOM 节点、同一 .visible 开关，不新增样式），并把素材源 BASE（含 mini-host
    * 端口）写进文案，让人一眼能判断是「包没打全」还是「宿主没起来」。
-   * 阈值取 3：单次超时/网络抖动不该惊动用户，但素材缺失是必然连败（每次切动画都失败）。
+   *
+   * 阈值按「本会话成功加载上过素材没有」分档（everAssetOk），而不是纯连败计数：
+   *   - 从未成功过 ⇒ **第 1 次失败就点亮**。素材缺失时动画链根本走不下去（加载失败已把
+   *     pending 释放掉，之后没有下一次换动画的时机），所以「连败 3 次」永远等不到——旧注释
+   *     把话说成「每次切动画都失败、总能攒够三次」是错的，阈值因此不可达，0.2.12 的隐形窗口正是这么溜过去的。
+   *   - 已成功过 ⇒ 仍要 3 次才点亮：单次超时/网络抖动不该惊动用户。
    */
   noteAssetLoadFailure(why) {
-    this.assetFailures = (this.assetFailures || 0) + 1;
+    this.assetFailures += 1;
     window.__dshPetDebug.assetFailures = this.assetFailures;
-    if (this.assetFailures < 3 || this.assetErrorShown) return;
-    this.assetErrorShown = true;
-    errorEl.textContent =
+    if (this.assetFailures < (this.everAssetOk ? 3 : 1)) return;
+    const msg =
       'dsh-pet 素材加载失败（连续 ' +
       this.assetFailures +
       ' 次，最近一次：' +
       why +
-      '）。多半是安装包里没有 assets/webm（便携版素材缺失），请换完整构建；素材源：' +
+      '）。多半是安装包里没有 assets/webm（便携版素材缺失），也可能是用户目录覆盖素材损坏，请换完整构建；素材源：' +
       BASE;
+    if (this.assetErrorShown) {
+      // 已经点亮过：后续失败只把文案里的次数刷成新值（一次字符串赋值，不重排 DOM、不重加 class）
+      if (errorEl.textContent !== msg) errorEl.textContent = msg;
+      return;
+    }
+    this.assetErrorShown = true;
+    errorEl.textContent = msg;
     errorEl.classList.add('visible');
   }
 
-  /** 一旦有动画成功就位即视为恢复：计数归零，之前点亮的素材错误条自动撤下 */
+  /**
+   * 有动画成功就位：登记 everAssetOk（阈值回到「连败 3 次」）+ 计数归零，之前点亮的
+   * 素材错误条自动撤下。收起前先查 assetErrorShown——这块面板 renderer.js 的配置错误条
+   * 用的是同一个节点，不是本方法点亮的就绝不能替它藏起来。
+   */
   clearAssetLoadFailure() {
+    this.everAssetOk = true;
+    window.__dshPetDebug.everAssetOk = true;
     this.assetFailures = 0;
     window.__dshPetDebug.assetFailures = 0;
     if (!this.assetErrorShown) return;

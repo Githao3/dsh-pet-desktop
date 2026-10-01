@@ -904,7 +904,10 @@ export function makePetUI(rt: {
         : actions[Math.floor(Math.random() * actions.length)];
       if (!chosen) return false;
       const mp = Object.assign({}, moves.default, chosen.params || {});
-      const dir = (facingRef.current === 'right') !== petAnims.turn.includes(animRef.current) ? 1 : -1;
+      // dir 只看当前朝向：转向动画的 facing 翻转在 ended 已完成，此处直接用最新值。
+      // 上游原版在此再亦或一次「上个动画是转向」（此刻 animRef 仍是转向名），
+      // 等于把刚翻好的朝向又翻回去 → 转向后紧跟移动时窗口位移与跑步方向相反（本地修，与 sprite.js 同步）。
+      const dir = facingRef.current === 'right' ? 1 : -1;
       const W = window.innerWidth;
       // 移动距离随宠物缩放：config 的 minDist/maxDist 是基准尺寸（462px 宽）下的 px，
       // 按 实际size/基准 等比缩放 —— 小宠物挪小步、大宠物挪大步，与人物自身大小匹配

@@ -263,6 +263,35 @@ describe('守卫：sprite.js 的素材缺失错误条（0.2.12 便携版隐形�
   });
 });
 
+describe('守卫：转向后紧跟移动的方向计算不得双重翻转（上游 bug 本地修）', () => {
+  // 上游原版 dir = (facing==='right') !== turn.includes(上个动画名) ? 1 : -1：
+  // facing 翻转已在 handleEnded/ended 完成，而选下一个动画时 this.anim/animRef 仍是转向名，
+  // 亦或项再翻一次 → 转向→移动相邻时窗口位移与跑步画面方向相反。
+  // 修法：dir 只看当前 facing。两端（sprite.js / pet.ts）同病同治，这里两头都钉。
+  const sprite = readSource(helper + 'sprite.js');
+  const pet = readSource('../client/pet.ts');
+
+  test('sprite.js：dir 必须只由 facing 决定，不得残留 turn 亦或', () => {
+    const line = lineWith(sprite, 'const dir =');
+    assert.match(
+      line,
+      /const dir = this\.facing === 'right' \? 1 : -1;/,
+      'dir 必须直取当前朝向（翻转向已在 handleEnded 做过）',
+    );
+    assert.doesNotMatch(line, /\bturn\b/, 'dir 行不得再掺入转向判断（双重翻转即本 bug 本体）');
+  });
+
+  test('pet.ts（浏览器端）：同款修复同步在位，不得单边回退', () => {
+    const line = lineWith(pet, 'const dir =');
+    assert.match(
+      line,
+      /const dir = facingRef\.current === 'right' \? 1 : -1;/,
+      '浏览器端 dir 必须与桌面端同一语义（两端行为一致是本项目底线）',
+    );
+    assert.doesNotMatch(line, /\bturn\b/, 'dir 行不得再掺入转向判断');
+  });
+});
+
 describe('start-standalone launcher', () => {
   // 启动器不经 tsc、Electron 没起来时什么断言都做不了——只能读源码钉结构（同本文件其余守卫）。
   // 一律「语义断言」：断某行/某形态存在或不存在，不看字符距离（禁止 [\s\S]{0,N}? 距离预算）。

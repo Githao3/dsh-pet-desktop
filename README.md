@@ -47,6 +47,8 @@ npm run dist:desktop     # 产物在 dsh-pet/dist-desktop/（portable + NSIS 安
 
 格式写错的字段会回落默认值；物理与挤压曲线在 `dsh-pet/src/shared/physics.ts`（拖拽阻尼弹簧跟手、甩抛抛物线、屏幕边缘反弹、落地摩擦）。
 
+菜单开关写回的两条已知限制（失败会留主进程日志，不静默）：① 写回要求 `main-config.json` 是**严格 JSON**（不能带注释——带注释的文件读得到写不回，防抹注释）；② pet pack 种类不在 main-config 条目里，其「漫游」翻转仅当次生效不持久（文件宠物永不回写，上游约定）。
+
 ### 自定义动画（不换角色，只换/加动作）
 
 往 `~/.dsh/dsh-pet/main-animation/webm/` 放 **VP9-Alpha 的 `.webm`**，文件名与动作名一致（中文即动作名，如 `吃火锅.webm`）即覆盖该动作。新增动作还需在 `main-config.json` 的 `animations` 池里登记名字（否则随机链和右键菜单都不认识它）；注意覆盖语义是整字段替换——登记时要照着包内 `config.jsonc` 的完整 `animations` 结构改，不能只写新增那一条。

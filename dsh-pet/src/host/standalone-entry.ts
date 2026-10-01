@@ -13,7 +13,7 @@
  * 用户配置语义（沿用上游）：main-config.json 是覆盖层，pets 字段整体替换内置默认；
  * 用户手写配置后本模块不再碰它（存在即跳过）。
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readAllConfig, flattenPetList, type ConfigPaths } from './config';
 
@@ -70,6 +70,9 @@ export function ensureStarterUserConfig(userFile: string): boolean {
  * 只改不增：文件/条目缺失或 JSON 损坏 → 返回 false 绝不落盘（新建条目会触发 mergePet 的
  * name→id 回退告警，改坏用户文件更不可接受；starter 保证首跑必有 main 条目）。
  * 其余字段原样透传（用户手写的 animations 覆盖层等不受影响）；幂等：同值不重写文件。
+ * 落盘走「临时文件 + 同卷 rename」原子替换：用户手写配置绝不被截断半写（断电/杀进程窗口）。
+ * 注意：读侧用严格 JSON.parse（不剥注释）——带注释的 JSONC 用户文件会被判非法拒写，
+ * 比默默抹掉用户注释诚实；调用方（main.js）对 false 告警可观测。
  * key 白名单由调用方（main.js IPC 处理器）把守，本函数不重复设卡。
  */
 export function setUserPetField(userFile: string, petId: string, key: string, value: boolean): boolean {
@@ -87,6 +90,9 @@ export function setUserPetField(userFile: string, petId: string, key: string, va
   if (!entry) return false;
   if (entry[key] === value) return true;
   entry[key] = value;
-  writeFileSync(userFile, JSON.stringify(parsed, null, 2) + '\n', 'utf8');
+  // 原子替换：先写同目录临时文件再 rename（同卷 rename 原子，读者只会看到旧/新全量之一）
+  const tmpFile = userFile + '.tmp';
+  writeFileSync(tmpFile, JSON.stringify(parsed, null, 2) + '\n', 'utf8');
+  renameSync(tmpFile, userFile);
   return true;
 }

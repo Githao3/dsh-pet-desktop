@@ -871,7 +871,16 @@ app.whenReady().then(async () => {
     const petId = [...windows.keys()].find((id) => windows.get(id) === win);
     if (!petId) return;
     try {
-      require('./standalone-core.cjs').setUserPetField(miniHost.userFile, petId, key, value);
+      const saved = require('./standalone-core.cjs').setUserPetField(miniHost.userFile, petId, key, value);
+      // 写盘失败要可观测（不能再静默）：pet-pack 宠物不在 main-config 条目里、或用户文件是
+      // 带注释的 JSONC/已损坏 → 严格 JSON 读侧拒写。当次翻转仍生效，重启后恢复默认——留日志供排查。
+      if (!saved) {
+        console.warn(
+          '[standalone] moveEnabled 未持久化（宠物 ' +
+            petId +
+            ' 不在 main-config.json 条目内，或该文件非严格 JSON/损坏）：当次生效，重启后不保留',
+        );
+      }
     } catch (e) {
       console.error('[standalone] pet:save-field failed:', e);
     }

@@ -336,6 +336,8 @@ describe('守卫：漫游开关（moveEnabled）全链接线（桌面端新功�
   test('sprite.js：翻转后持久化走 petBridge.savePetField（能力探测，桥缺失时静默仅当次生效）', () => {
     const fn = methodBody(sprite, 'onMenuAction');
     assert.match(fn, /this\.moveOn = !this\.moveOn;/, 'toggle-roam 必须真实翻转运行态');
+    // 关档的即时接管也得钉住：只翻标志不停在飞位移，宠物会「关了就位还滑出去一段」
+    assert.match(fn, /this\.stopMove\(\);/, '关档必须立即 stopMove 掐断进行中的窗口位移');
     assert.match(
       fn,
       /window\.petBridge\) window\.petBridge\.savePetField\('moveEnabled', this\.moveOn\)/,

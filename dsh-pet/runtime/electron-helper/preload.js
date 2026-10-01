@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld('petBridge', {
   openDshSite(url) {
     ipcRenderer.send('pet:open-site', { url });
   },
+  // 菜单开关持久化（漫游）：主进程把白名单字段写进用户层配置（键白名单在主进程侧把守）
+  savePetField(key, value) {
+    ipcRenderer.send('pet:save-field', { key, value });
+  },
   // ---- 宠物间碰撞（跨窗 broker）----
   reportFlight(state) {
     ipcRenderer.send('pet:report-flight', state);

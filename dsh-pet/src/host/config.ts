@@ -367,6 +367,7 @@ function mergePet(
     balanceEnabled: petBool(p.balanceEnabled, base.balanceEnabled, label, 'balanceEnabled', id),
     whisperEnabled: petBool(p.whisperEnabled, base.whisperEnabled, label, 'whisperEnabled', id),
     workStatusEnabled: petBool(p.workStatusEnabled, base.workStatusEnabled, label, 'workStatusEnabled', id),
+    moveEnabled: petBool(p.moveEnabled, base.moveEnabled, label, 'moveEnabled', id),
     display: petEnum(p.display, PET_DISPLAY_SET, base.display, label, 'display', id),
     position: {
       corner: petEnum(ownPos.corner, CORNER_SET, basePos.corner, label, 'position.corner', id),
@@ -466,6 +467,9 @@ export function saveUserConfig(
     if (whisperEnabled !== undefined && typeof whisperEnabled !== 'boolean') return null;
     const workStatusEnabled = pp.workStatusEnabled;
     if (workStatusEnabled !== undefined && typeof workStatusEnabled !== 'boolean') return null;
+    // moveEnabled 透传：独立版菜单开关写的就是这个字段，设置页保存不得把它抹掉
+    const moveEnabled = pp.moveEnabled;
+    if (moveEnabled !== undefined && typeof moveEnabled !== 'boolean') return null;
     const display = String(pp.display ?? '');
     if (!PET_DISPLAY_SET.has(display)) return null;
     const pos = pp.position && typeof pp.position === 'object' ? (pp.position as Record<string, unknown>) : {};
@@ -481,6 +485,7 @@ export function saveUserConfig(
       balanceEnabled,
       whisperEnabled,
       workStatusEnabled,
+      moveEnabled,
       display,
       position: { corner, marginX, marginY },
     });

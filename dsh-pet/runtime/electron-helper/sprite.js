@@ -70,6 +70,10 @@ class PetSprite {
     this.anim = this.animations.idle[0] ?? '';
     this.once = true;
     this.facing = 'left';
+    // 漫游开关（配置 pets[].moveEnabled，内置默认 true）：false 时随机链不抽移动、菜单隐藏
+    // 「移动」分类、tryMove 直接拒演（拖拽摆放/抛掷物理不受影响）。菜单「漫游」项运行时翻转
+    // 并经 IPC 写盘持久（main.js pet:save-field），重启后由 /config 读回。
+    this.moveOn = this.pet.moveEnabled !== false;
     // 素材加载兜底（见 noteAssetLoadFailure / clearAssetLoadFailure）：连败计数、错误条是否
     // 已由本方法点亮、本会话是否成功加载上过素材（决定阈值分档）。三个字段成组初始化，
     // 不靠 `this.x || 0` 那种惰性写法——读代码的人得能在构造函数里看到全貌。
@@ -475,7 +479,9 @@ class PetSprite {
     this.stopMove();
     const { animations, animationWeights } = { animations: this.animations, animationWeights: this.weights };
     const roll = Math.random();
-    const k = S.rollKind(roll, animationWeights);
+    let k = S.rollKind(roll, animationWeights);
+    // 漫游关闭：抽到移动改走分类池（池空时 pickCategoryAction 内部回落 idle），与 tryMove 失败同路径
+    if (k === 'move' && !this.moveOn) k = 'category';
     let next;
     if (k === 'idle') {
       next = S.pick(animations.idle, this.anim);
@@ -569,6 +575,7 @@ class PetSprite {
   // ---- 漫游（rAF 驱动，动画首尾各 leadSec/tailSec 秒原地不动；几何在 shared/planMove） ----
   // preferredName 传入时固定使用该动画（右键菜单点播移动动画），否则与随机链一致随机选
   tryMove(preferredName) {
+    if (!this.moveOn) return false; // 漫游关闭：一律拒演（返回 false 走调用方的退化分支）
     if (this.moveRef !== null || this.pendingMove || this.throwRef !== null) return true;
     const moves = this.animations.moves;
     const actions = moves.actions;
@@ -1103,8 +1110,14 @@ class PetSprite {
     const tools = [{ label: '打开网站', action: 'open-site' }];
     if (this.pet.balanceEnabled) tools.push({ label: '查看余额', action: 'show-balance' });
     if (!NO_LLM) tools.push({ label: '碎碎念', action: 'whisper' }, { label: '对话', action: 'chat' });
+    // 漫游开关（桌面端工具项）：文字即状态，关闭时也显示（否则再也打不开）；
+    // 关闭时菜单树用 moves.actions 置空的浅拷贝——buildMenuTree 对空池自动省略「移动」分类
+    tools.push({ label: this.moveOn ? '漫游：开' : '漫游：关', action: 'toggle-roam' });
     tools.push({ label: '回到初始位置', action: 'home' });
-    const tree = tools.concat(S.buildMenuTree(this.animations));
+    const animsForMenu = this.moveOn
+      ? this.animations
+      : { ...this.animations, moves: { ...this.animations.moves, actions: [] } };
+    const tree = tools.concat(S.buildMenuTree(animsForMenu));
     if (!tree.length) return;
     this.menuOpen = true;
     this.setInteractive(true); // 菜单是窗口内 DOM：悬停期间整窗保持可交互，关闭后恢复命中区穿透
@@ -1148,6 +1161,17 @@ class PetSprite {
     }
     if (leaf.action === 'home') {
       this.goHome(); // 停漫游/移动，清会话位置，回配置角落
+      return;
+    }
+    if (leaf.action === 'toggle-roam') {
+      this.moveOn = !this.moveOn;
+      if (!this.moveOn) {
+        // 立即接管：停掉进行中的窗口位移；正在播移动动画则掐断回随机链（关闭后它不该再出现）
+        this.stopMove();
+        if (this.animations.moves.actions.some((a) => a.name === this.anim)) this.playIdle();
+      }
+      // 持久化：主进程写 pets[].moveEnabled（桥接模式无 miniHost 时静默跳过，仅当次翻转生效）
+      if (window.petBridge) window.petBridge.savePetField('moveEnabled', this.moveOn);
       return;
     }
     if (!leaf.anim) return;

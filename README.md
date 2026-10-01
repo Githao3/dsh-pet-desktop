@@ -6,7 +6,7 @@
 
 - 预编译成品（安装版 / 解压版 / 便携版）见 GitHub Releases（v0.2.13-desktop 起）
 - 基座代码：`dsh-pet/`（上游 v0.2.12 zip 快照，改造遵循"上游文件能不改就不改"原则，已在 `master`）
-- 上游同步：本仓库含 `upstream` remote 指向 PC2005-cloud/dsh-pet；同步 = `git fetch upstream` + merge upstream/main 后重放全部本地补丁，补丁台账：main.js（独立接线）、sprite.js（noLlm 菜单门 + 素材加载失败可见性报错条）、helper-process.test.ts（electron 解析优先级断言）、eslint.config.js 与 .prettierignore（runtime CJS 豁免）、package.json + scripts/prepare.js（构建串接）、electron-builder.yml（关 `preCompressedFileExtensions`，修便携版漏素材）、assets/config.jsonc（写福字移入 noMirror 文字分类，避免福字镜像成反字）、sprite.js + src/client/pet.ts（修上游移动方向双重翻转：dir 只看 facing，不再亦或上个动画是否转向）、scripts/check-desktop-artifact.js（产物体检门禁）、src/host/standalone-patch.test.ts（守卫=补丁台账，merge 后它红就是补丁丢了）
+- 上游同步：本仓库含 `upstream` remote 指向 PC2005-cloud/dsh-pet；同步 = `git fetch upstream` + merge upstream/main 后重放全部本地补丁，补丁台账：main.js（独立接线）、sprite.js（noLlm 菜单门 + 素材加载失败可见性报错条）、helper-process.test.ts（electron 解析优先级断言）、eslint.config.js 与 .prettierignore（runtime CJS 豁免）、package.json + scripts/prepare.js（构建串接）、electron-builder.yml（关 `preCompressedFileExtensions`，修便携版漏素材）、assets/config.jsonc（写福字移入 noMirror 文字分类，避免福字镜像成反字）、sprite.js + src/client/pet.ts（修上游移动方向双重翻转：dir 只看 facing，不再亦或上个动画是否转向）、scripts/check-desktop-artifact.js（产物体检门禁）、漫游开关全套：types.ts/config.ts/settings.ts/config.jsonc（moveEnabled 字段）+ standalone-entry.ts（setUserPetField 只改不增写盘）+ mini-host.js（暴露 userFile）+ main.js（pet:save-field 写盘 IPC）+ preload.js（savePetField 桥）+ sprite.js（moveOn 门控与菜单开关项）、src/host/standalone-patch.test.ts（守卫=补丁台账，merge 后它红就是补丁丢了）
 
 ## 快速开始（开发）
 
@@ -41,11 +41,13 @@ npm run dist:desktop     # 产物在 dsh-pet/dist-desktop/（portable + NSIS 安
 
 | 字段 | 作用 |
 |------|------|
-| `pets` | 宠物列表：每只 `id` / `size`（宽 px，高=宽×9/16）/ `position`（`corner` 四角之一 + `marginX/marginY` 边距）/ `display`（独立版固定用 `desktop`）。多开＝数组里加多项 |
+| `pets` | 宠物列表：每只 `id` / `size`（宽 px，高=宽×9/16）/ `position`（`corner` 四角之一 + `marginX/marginY` 边距）/ `display`（独立版固定用 `desktop`）/ `moveEnabled`（漫游开关，默认开；也可右键菜单「漫游：开/关」一键翻转，自动写回本字段）。多开＝数组里加多项 |
 | `animations` | 动画池：idle / turn / drag / clicks / moves / categories / events，照 config.jsonc 结构写 |
 | `animationWeights` | 动画链播放权重（默认 idle 10 / turn 5 / move 5），播完按权重选下一个，首尾相接无缝切换 |
 
 格式写错的字段会回落默认值；物理与挤压曲线在 `dsh-pet/src/shared/physics.ts`（拖拽阻尼弹簧跟手、甩抛抛物线、屏幕边缘反弹、落地摩擦）。
+
+菜单开关写回的两条已知限制（失败会留主进程日志，不静默）：① 写回要求 `main-config.json` 是**严格 JSON**（不能带注释——带注释的文件读得到写不回，防抹注释）；② pet pack 种类不在 main-config 条目里，其「漫游」翻转仅当次生效不持久（文件宠物永不回写，上游约定）。
 
 ### 自定义动画（不换角色，只换/加动作）
 

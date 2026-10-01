@@ -4,10 +4,16 @@
  */
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { petPaths, desktopPetList, ensureStarterUserConfig, mergedConfig } from './standalone-entry.ts';
+import {
+  petPaths,
+  desktopPetList,
+  ensureStarterUserConfig,
+  mergedConfig,
+  setUserPetField,
+} from './standalone-entry.ts';
 
 const dirs: string[] = [];
 function tmp(): string {
@@ -137,6 +143,54 @@ describe('ensureStarterUserConfig', () => {
     writeFileSync(file, JSON.stringify({ pets: [] }));
     assert.equal(ensureStarterUserConfig(file), false);
     assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')), { pets: [] });
+  });
+});
+
+describe('setUserPetField —— 菜单「漫游」开关写盘（只改不增/幂等/绝不碰非法文件）', () => {
+  test('更新既有条目单字段，条目其余字段与顶层手写覆盖层原样保留', () => {
+    const dir = tmp();
+    const file = join(dir, 'main-config.json');
+    writeFileSync(
+      file,
+      JSON.stringify({ pets: [{ id: 'main', name: '女仆', balanceEnabled: false }], animations: { idle: ['手写'] } }),
+    );
+    assert.equal(setUserPetField(file, 'main', 'moveEnabled', false), true);
+    const obj = JSON.parse(readFileSync(file, 'utf8'));
+    assert.equal(obj.pets[0].moveEnabled, false);
+    assert.equal(obj.pets[0].name, '女仆'); // 条目其余字段不动
+    assert.equal(obj.pets[0].balanceEnabled, false);
+    assert.deepEqual(obj.animations, { idle: ['手写'] }); // 顶层覆盖层不被抹掉
+  });
+
+  test('目标条目不存在 → false 且文件一字节不变（新建条目会触发 name→id 回退，不可接受）', () => {
+    const dir = tmp();
+    const file = join(dir, 'main-config.json');
+    const before = JSON.stringify({ pets: [{ id: 'other', name: '别的' }] });
+    writeFileSync(file, before);
+    assert.equal(setUserPetField(file, 'main', 'moveEnabled', false), false);
+    assert.equal(readFileSync(file, 'utf8'), before);
+  });
+
+  test('文件缺失 / JSON 损坏 / pets 非数组 → 一律 false，绝不落盘', () => {
+    const dir = tmp();
+    assert.equal(setUserPetField(join(dir, 'nope.json'), 'main', 'moveEnabled', true), false);
+    const bad = join(dir, 'bad.json');
+    writeFileSync(bad, '{oops');
+    assert.equal(setUserPetField(bad, 'main', 'moveEnabled', true), false);
+    const noPets = join(dir, 'no-pets.json');
+    writeFileSync(noPets, JSON.stringify({ display: 'desktop' }));
+    assert.equal(setUserPetField(noPets, 'main', 'moveEnabled', true), false);
+    assert.equal(readFileSync(bad, 'utf8'), '{oops'); // 损坏文件没被重写
+  });
+
+  test('幂等：同值不重写文件（mtime 不变，菜单反复点同一状态不磨盘）', () => {
+    const dir = tmp();
+    const file = join(dir, 'main-config.json');
+    writeFileSync(file, JSON.stringify({ pets: [{ id: 'main', moveEnabled: false }] }));
+    assert.equal(setUserPetField(file, 'main', 'moveEnabled', false), true);
+    const statBefore = statSync(file).mtimeMs;
+    assert.equal(setUserPetField(file, 'main', 'moveEnabled', false), true);
+    assert.equal(statSync(file).mtimeMs, statBefore);
   });
 });
 

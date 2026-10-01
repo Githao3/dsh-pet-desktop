@@ -120,6 +120,9 @@
       // 工作状态联动默认关闭：开启后监听 DSH 会话事件（工具调用等），按
       // animations.events.workStatus 数组切档位动画 + 气泡（仅监听，不调用模型）。
       "workStatusEnabled": false,
+      // 漫游开关：false 时宠物固定就地——随机链不抽移动、菜单隐藏「移动」分类、
+      // 点播移动也不走位（拖拽摆放不受影响）。独立版右键菜单「漫游」开关经 IPC 写盘维护。
+      "moveEnabled": true,
       "display": "both",
       "position": {
         "corner": "top-right",

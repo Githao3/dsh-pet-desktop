@@ -95,6 +95,12 @@ export interface Pet {
   /** 是否启用工作状态联动：true=监听 DSH 会话事件（tool/call 等），按 animations.events.workStatus
    *  数组切档位动画 + 气泡；false=禁用（默认）。监听不调用模型，无 KV cache 风险 */
   workStatusEnabled: boolean;
+  /** 是否启用漫游（移动动画）：true=随机链可抽到移动、菜单显示「移动」分类；
+   *  false=宠物固定就地，移动动作全部退场（拖拽摆放不受影响）。
+   *  缺失即配置错误（config.jsonc 内置默认 true；独立版右键菜单「漫游」开关经 IPC 写盘维护本字段）。
+   *  作用域：目前仅桌面 helper（sprite.js）消费；浏览器端 pet.ts 未接线，display:'both' 的宠物
+   *  网页侧仍会漫游（独立版产品只有桌面一只，属已知限定非漏洞） */
+  moveEnabled: boolean;
   /** 显示位置（web/desktop/both/none，必填）：缺失即配置错误，代码不做兜底 */
   display: PetDisplay;
   position: { corner: Corner; marginX: number; marginY: number };

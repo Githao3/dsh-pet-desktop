@@ -467,6 +467,7 @@ export function makePetConfigSection(rt: {
           balanceEnabled: tpl.balanceEnabled,
           whisperEnabled: tpl.whisperEnabled,
           workStatusEnabled: tpl.workStatusEnabled,
+          moveEnabled: tpl.moveEnabled,
           display: tpl.display,
           position: { ...tpl.position },
         },

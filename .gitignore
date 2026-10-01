@@ -53,3 +53,6 @@ BATON.md
 .zcodeignore
 pet-refs/
 temp-portable-diag/
+
+# ── 旧版 exe 产物归档（用户规则：发版不删旧包，移入此处按版本号分层）──
+dist-archive/

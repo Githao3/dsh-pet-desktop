@@ -46,3 +46,10 @@ desktop.ini
 
 # ── AI 工作过程产物（设计规格/实施计划），仅本地保留不入库 ──
 docs/
+
+# ── AI 工具与本地临时产物（接棒胶囊/技能配置/参考图/诊断输出），不入库 ──
+BATON.md
+.agents/
+.zcodeignore
+pet-refs/
+temp-portable-diag/

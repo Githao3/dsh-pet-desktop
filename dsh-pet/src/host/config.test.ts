@@ -145,6 +145,38 @@ describe('readAllConfig —— events 槽位 string | string[] 校验', () => {
   });
 });
 
+describe('readAllConfig —— moveEnabled 漫游开关合并（菜单开关写盘的读回路径）', () => {
+  /** 默认层带 moveEnabled:true（与 config.jsonc 内置默认同形），用户层可覆盖宠物条目字段 */
+  function mergeMove(userPet: Record<string, unknown>): unknown {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-pet-move-test-'));
+    try {
+      const paths: ConfigPaths = {
+        defaultFile: join(dir, 'default.jsonc'),
+        userFile: join(dir, 'main-config.json'),
+        petDir: join(dir, 'pet'),
+      };
+      writeFileSync(paths.defaultFile, JSON.stringify({ ...BASE, pets: [{ ...BASE.pets[0], moveEnabled: true }] }));
+      writeFileSync(paths.userFile, JSON.stringify({ pets: [{ ...BASE.pets[0], ...userPet }] }));
+      const pets = readAllConfig(paths).main.pets as Record<string, unknown>[];
+      return pets[0].moveEnabled;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  test('用户层没写 → 内置默认 true（petBool 缺省回落 Boolean(def)，默认必须显式写在包里）', () => {
+    assert.equal(mergeMove({}), true);
+  });
+
+  test('用户层显式 false → 关（菜单开关重启后读回即此路径）', () => {
+    assert.equal(mergeMove({ moveEnabled: false }), false);
+  });
+
+  test('显式非法值 → 告警回退内置默认 true', () => {
+    assert.equal(mergeMove({ moveEnabled: 'nope' }), true);
+  });
+});
+
 describe('readAllConfig —— events 缺失仍回退默认（既有行为不回退）', () => {
   test('用户层完全没写 animations → 用内置默认', () => {
     cases({

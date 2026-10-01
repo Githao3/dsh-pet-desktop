@@ -235,6 +235,9 @@ async function createMiniHost({ packageRoot, dshHome, port = 0 }) {
   return {
     server,
     url: `http://127.0.0.1:${bound}`,
+    // 用户层配置文件路径：主进程的菜单开关写盘通道（pet:save-field）要直接改这个文件，
+    // 不经 HTTP（第一阶段无写端点的承诺保持不动）；与 /config 读的是同一份，绝不另推路径。
+    userFile: paths.userFile,
     close: () =>
       new Promise((ok, err) => {
         // 只靠 server.close() 会等 keep-alive 套接字自己超时（实测 ~3s 才回 close 事件，

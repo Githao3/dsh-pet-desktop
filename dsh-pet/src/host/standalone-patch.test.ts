@@ -292,6 +292,79 @@ describe('守卫：转向后紧跟移动的方向计算不得双重翻转（上�
   });
 });
 
+describe('守卫：漫游开关（moveEnabled）全链接线（桌面端新功能，菜单翻转→IPC 写盘→重启读回）', () => {
+  const sprite = readSource(helper + 'sprite.js');
+  const main = readSource(helper + 'main.js');
+  const preload = readSource(helper + 'preload.js');
+
+  test('sprite.js：moveOn 必须从 pet.moveEnabled 取（!== false：缺失默认开）', () => {
+    const line = lineWith(sprite, 'this.moveOn =');
+    assert.match(
+      line,
+      /this\.moveOn = this\.pet\.moveEnabled !== false;/,
+      '初始化语义必须是「非 false 即开」（与 config.jsonc 内置默认 true 配套）',
+    );
+  });
+
+  test('sprite.js：随机链抽到 move 必须改走分类；tryMove 第 0 道守卫拒演', () => {
+    assert.match(
+      sprite,
+      /if \(k === 'move' && !this\.moveOn\) k = 'category';/,
+      '关闭时随机链不得抽到移动（改走分类，池空回落 idle）',
+    );
+    const body = methodBody(sprite, 'tryMove');
+    assert.match(
+      body,
+      /if \(!this\.moveOn\) return false;[\s\S]*moveRef !== null/,
+      'tryMove 入口第一行就得多 moveOn 守卫（先于占用检查：关闭时点播/其它路径一律拦下）',
+    );
+  });
+
+  test('sprite.js：菜单永远显示「漫游」开关项（关闭时也显示，否则再也打不开）；关闭时菜单树隐藏移动组', () => {
+    assert.match(
+      sprite,
+      /label: this\.moveOn \? '漫游：开' : '漫游：关', action: 'toggle-roam'/,
+      '开关项必须无条件 push（文字即状态）',
+    );
+    assert.match(
+      sprite,
+      /moves: \{ \.\.\.this\.animations\.moves, actions: \[\] \}/,
+      '关闭时菜单树用 moves.actions 置空的浅拷贝（buildMenuTree 对空池自动省略「移动」分类）',
+    );
+  });
+
+  test('sprite.js：翻转后持久化走 petBridge.savePetField（能力探测，桥缺失时静默仅当次生效）', () => {
+    const fn = methodBody(sprite, 'onMenuAction');
+    assert.match(fn, /this\.moveOn = !this\.moveOn;/, 'toggle-roam 必须真实翻转运行态');
+    assert.match(
+      fn,
+      /window\.petBridge\) window\.petBridge\.savePetField\('moveEnabled', this\.moveOn\)/,
+      '翻转后必须请求写盘（带 window.petBridge 存在守卫）',
+    );
+  });
+
+  test('main.js：pet:save-field 处理器把守键白名单+布尔校验，写盘用发送窗口反查的 petId', () => {
+    const handler = main.match(/ipcMain\.on\('pet:save-field'[\s\S]*?\n {2}\}\);/)?.[0] ?? '';
+    assert.ok(handler, 'pet:save-field 处理器提取失败（必须存在）');
+    assert.match(
+      handler,
+      /key !== 'moveEnabled' \|\| typeof value !== 'boolean'\) return;/,
+      '必须只收 moveEnabled 键 + 布尔值（否则任意键都能写用户配置）',
+    );
+    assert.match(handler, /\[\.\.\.windows\.keys\(\)\]\.find/, 'petId 必须由发送窗口反查（渲染端报不了别人的 id）');
+    assert.match(
+      handler,
+      /setUserPetField\(miniHost\.userFile/,
+      '落盘必须走 mini-host 同源路径（与 /config 读同一份）',
+    );
+  });
+
+  test('preload.js：savePetField 桥方法在位（渲染端唯一出口，不暴露裸 ipcRenderer）', () => {
+    assert.match(preload, /savePetField\(key, value\)\s*\{/, 'contextBridge 必须暴露 savePetField');
+    assert.match(preload, /ipcRenderer\.send\('pet:save-field', \{ key, value \}\)/, '桥体只转发固定通道与固定形状');
+  });
+});
+
 describe('start-standalone launcher', () => {
   // 启动器不经 tsc、Electron 没起来时什么断言都做不了——只能读源码钉结构（同本文件其余守卫）。
   // 一律「语义断言」：断某行/某形态存在或不存在，不看字符距离（禁止 [\s\S]{0,N}? 距离预算）。

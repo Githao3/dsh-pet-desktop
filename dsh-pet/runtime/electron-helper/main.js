@@ -858,6 +858,25 @@ app.whenReady().then(async () => {
     });
   });
 
+  // 右键菜单「漫游」开关：渲染端翻转后通知主进程把 pets[].moveEnabled 写进用户层配置。
+  // 写盘走 IPC 而不开 HTTP 写端点（第一阶段「mini-host 无写接口」的承诺保持）；
+  // 下次启动 /config 读到新值即持久生效。只收白名单键；petId 由发送窗口反查
+  // （渲染端报不了别人的 id）；桥接模式无 miniHost → 静默跳过（当次翻转仍生效，不持久）。
+  ipcMain.on('pet:save-field', (event, payload) => {
+    const key = payload && typeof payload === 'object' ? payload.key : undefined;
+    const value = payload && typeof payload === 'object' ? payload.value : undefined;
+    if (key !== 'moveEnabled' || typeof value !== 'boolean') return;
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed() || !miniHost || !miniHost.userFile) return;
+    const petId = [...windows.keys()].find((id) => windows.get(id) === win);
+    if (!petId) return;
+    try {
+      require('./standalone-core.cjs').setUserPetField(miniHost.userFile, petId, key, value);
+    } catch (e) {
+      console.error('[standalone] pet:save-field failed:', e);
+    }
+  });
+
   // 显示器热更新：分辨率/缩放变化、插拔屏、旋转都会让桌面几何失效。原先几何只在
   // createPetWindows() 算一次并经 URL query 注入，渲染端 VIEW 是模块顶层常量，运行期永不更新——
   // 表现为「改了分辨率后可移动范围还是旧的」。这里重算并推给所有窗口，渲染端就地重挂。

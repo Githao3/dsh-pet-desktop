@@ -578,7 +578,10 @@ class PetSprite {
       : actions[Math.floor(Math.random() * actions.length)];
     if (!chosen) return false;
     const mp = Object.assign({}, moves.default, chosen.params || {});
-    const dir = (this.facing === 'right') !== this.animations.turn.includes(this.anim) ? 1 : -1;
+    // dir 只看当前朝向：转向动画的 facing 翻转在 handleEnded 已完成，此处直接用最新值。
+    // 上游原版在此再亦或一次「上个动画是转向」（此刻 this.anim 仍是转向名），
+    // 等于把刚翻好的朝向又翻回去 → 转向后紧跟移动时窗口位移与跑步方向相反（本地修）。
+    const dir = this.facing === 'right' ? 1 : -1;
     const W = VIEW.w;
     const H = VIEW.h;
     const distScale = this.size / S.PET_REF_WIDTH;

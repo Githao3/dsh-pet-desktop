@@ -88,6 +88,19 @@ python encode_thumbs.py      # 转码 640×360 播放变体 → step04/
 
 **③ 动画 → 桌宠**：把 `step04/*.webm` 拷进 `~/.dsh/dsh-pet/main-animation/webm/`（用户级覆盖，改完即用）或 `dsh-pet/assets/webm/`（替换包内素材，需重新 `npm run dist:desktop` 打包）。
 
+### 本地自制动作清单（v0.2.16 起随包发布）
+
+以下 4 个动作用 AI 视频生成 + 上述管线制作，已入库 `dsh-pet/assets/webm/` 并在 `config.jsonc` 登记（源片/母版/定稿提示词存于本地 `pet-refs/actions-pending/`，不入库）：
+
+| 动作 | 正式岗位 | 备注 |
+|---|---|---|
+| 合十拜托 | `events.workStatus` index 3（waiting 等待批准） | 档内与「原地踱步张望」随机轮换 |
+| 托腮盘发 | index 1（working 长任务） | 档内与「忙碌点按」随机轮换 |
+| 擦汗重试 | index 5（error 软失败） | 档内与「垂头叹气冒汗」随机轮换 |
+| 文件变米饭 | 暂无（将来挂「拖拽投喂」触发） | 仅存于 clicks 临时户口 |
+
+**临时户口**：四个动作同时登记在 `animations.clicks` 池（包内 config 带 ★ 注释标出），供手动点播验收；第二阶段接通 Agent 事件线后从 clicks 移除，前三项即纯事件驱动、文件变米饭改挂拖拽触发。workStatus 档内多候选数组为上游原生能力（`pickers.pickSlot`），无需改代码。
+
 ## 项目结构
 
 ```

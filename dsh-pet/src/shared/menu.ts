@@ -48,9 +48,13 @@ const EVENT_LABELS: Record<string, string> = {
   balance: '余额档位',
   whisper: '碎碎念',
   workStatus: '工作状态',
+  feed: '投喂',
 };
 
-const leaf = (anim: string): MenuLeaf => ({ label: anim, anim });
+// 菜单叶子：池名前缀（点击回应-/工作状态- 等）在分类层级里已重复表达，展示时剥掉；
+// anim 字段保留完整动画名（点播/素材文件名查找用，不得改动）。
+const POOL_PREFIX_RE = /^(点击回应|工作状态|碎碎念|余额)-/;
+const leaf = (anim: string): MenuLeaf => ({ label: anim.replace(POOL_PREFIX_RE, ''), anim });
 
 /**
  * 由合并后的 animations 配置推导菜单树 —— 输出 [{ 动作 → [ 分类 → [ 具体动画 ] ] }]：

@@ -6,7 +6,7 @@
 
 - 预编译成品（安装版 / 解压版 / 便携版）见 GitHub Releases（v0.2.13-desktop 起）
 - 基座代码：`dsh-pet/`（上游 v0.2.12 zip 快照，改造遵循"上游文件能不改就不改"原则，已在 `master`）
-- 上游同步：本仓库含 `upstream` remote 指向 PC2005-cloud/dsh-pet；同步 = `git fetch upstream` + merge upstream/main 后重放全部本地补丁，补丁台账：main.js（独立接线）、sprite.js（noLlm 菜单门 + 素材加载失败可见性报错条）、helper-process.test.ts（electron 解析优先级断言）、eslint.config.js 与 .prettierignore（runtime CJS 豁免）、package.json + scripts/prepare.js（构建串接）、electron-builder.yml（关 `preCompressedFileExtensions`，修便携版漏素材）、assets/config.jsonc（写福字移入 noMirror 文字分类，避免福字镜像成反字）、sprite.js + src/client/pet.ts（修上游移动方向双重翻转：dir 只看 facing，不再亦或上个动画是否转向）、scripts/check-desktop-artifact.js（产物体检门禁）、漫游开关全套：types.ts/config.ts/settings.ts/config.jsonc（moveEnabled 字段）+ standalone-entry.ts（setUserPetField 只改不增写盘）+ mini-host.js（暴露 userFile）+ main.js（pet:save-field 写盘 IPC）+ preload.js（savePetField 桥）+ sprite.js（moveOn 门控与菜单开关项）、src/host/standalone-patch.test.ts（守卫=补丁台账，merge 后它红就是补丁丢了）
+- 上游同步：本仓库含 `upstream` remote 指向 PC2005-cloud/dsh-pet；同步 = `git fetch upstream` + merge upstream/main 后重放全部本地补丁，补丁台账：main.js（独立接线）、sprite.js（noLlm 菜单门 + 素材加载失败可见性报错条）、helper-process.test.ts（electron 解析优先级断言）、eslint.config.js 与 .prettierignore（runtime CJS 豁免）、package.json + scripts/prepare.js（构建串接）、electron-builder.yml（关 `preCompressedFileExtensions`，修便携版漏素材）、assets/config.jsonc（写福字移入 noMirror 文字分类，避免福字镜像成反字）、sprite.js + src/client/pet.ts（修上游移动方向双重翻转：dir 只看 facing，不再亦或上个动画是否转向）、scripts/check-desktop-artifact.js（产物体检门禁）、漫游开关全套：types.ts/config.ts/settings.ts/config.jsonc（moveEnabled 字段）+ standalone-entry.ts（setUserPetField 只改不增写盘）+ mini-host.js（暴露 userFile）+ main.js（pet:save-field 写盘 IPC）+ preload.js（savePetField 桥）+ sprite.js（moveOn 门控与菜单开关项）、src/shared/menu.ts（菜单叶子 label 剥池名前缀，anim 字段保留全名）+ src/shared/menu.test.ts（菜单语义钉住：前缀剥离/数组槽展平/feed 分组映射）、src/host/standalone-patch.test.ts（守卫=补丁台账，merge 后它红就是补丁丢了）
 
 ## 快速开始（开发）
 
@@ -92,14 +92,16 @@ python encode_thumbs.py      # 转码 640×360 播放变体 → step04/
 
 以下 4 个动作用 AI 视频生成 + 上述管线制作，已入库 `dsh-pet/assets/webm/` 并在 `config.jsonc` 登记（源片/母版/定稿提示词存于本地 `pet-refs/actions-pending/`，不入库）：
 
-| 动作 | 正式岗位 | 备注 |
+| 动作 | 岗位 | 备注 |
 |---|---|---|
 | 合十拜托 | `events.workStatus` index 3（waiting 等待批准） | 档内与「原地踱步张望」随机轮换 |
 | 托腮盘发 | index 1（working 长任务） | 档内与「忙碌点按」随机轮换 |
 | 擦汗重试 | index 5（error 软失败） | 档内与「垂头叹气冒汗」随机轮换 |
-| 文件变米饭 | 暂无（将来挂「拖拽投喂」触发） | 仅存于 clicks 临时户口 |
+| 文件变米饭 | `events.feed`（投喂专属槽） | 当前仅菜单点播；第二阶段接「拖文件松手」触发 |
 
-**临时户口**：四个动作同时登记在 `animations.clicks` 池（包内 config 带 ★ 注释标出），供手动点播验收；第二阶段接通 Agent 事件线后从 clicks 移除，前三项即纯事件驱动、文件变米饭改挂拖拽触发。workStatus 档内多候选数组为上游原生能力（`pickers.pickSlot`），无需改代码。
+四个动作都不进随机链；菜单的「工作状态」「投喂」分类可直接点播预览（events 数组槽由 `buildMenuTree` 展平为叶子，上游原生能力）。workStatus 档内多候选为上游原生能力（`pickers.pickSlot`）。
+
+**菜单 label 前缀剥离（v0.2.17，本地补丁，见台账）**：菜单叶子展示时剥掉 `点击回应-`/`工作状态-`/`碎碎念-`/`余额-` 池名前缀（分类层级已表达归属，全库展示风格统一）；内部动画名/素材文件名不变。浏览器端与桌面端共用（menu.ts 单一事实源），单测 `src/shared/menu.test.ts` 钉住。
 
 ## 项目结构
 

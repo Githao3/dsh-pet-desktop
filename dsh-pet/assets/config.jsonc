@@ -148,12 +148,19 @@
     // 拖拽动画池（数组；每一项都必须是“被无形抓起悬空”的姿势）
     "drag": ["被鼠标拖拽悬空反馈"],
     // 点击回应动画池（点按宠物时触发，随机抽 1 个）
+    // 后四项为自制动作的"试运行临时户口"（方便手动点播验收）：前三项的正式岗位在
+    // events.workStatus 对应档位；文件变米饭将来挂"拖拽投喂"专用触发。第二阶段事件线
+    // 接通后，把带 ★ 注释的这四项从本池移除即可。
     "clicks": [
       "点击回应-开心跃动",
       "点击回应-害羞惊讶",
       "点击回应-傲娇生气",
       "点击回应-挠痒咯咯笑",
-      "点击回应-元气挥手"
+      "点击回应-元气挥手",
+      "合十拜托",      // ★ 试运行临时项（正式岗=workStatus waiting 档）
+      "托腮盘发",      // ★ 试运行临时项（正式岗=workStatus working 档）
+      "擦汗重试",      // ★ 试运行临时项（正式岗=workStatus error 档）
+      "文件变米饭"     // ★ 试运行临时项（正式岗=拖拽投喂触发，第二阶段实现）
     ],
     // 移动动画池：default 是每个动作都用的默认参数；actions 里每项可覆盖部分参数，
     // 未写的字段取 default。minDist/maxDist=单次行进距离(px)——以「基准宠物宽 462px」为准，
@@ -230,11 +237,11 @@
       //   index 5 = error（turn/end error/max-tokens 出错/达上限）
       "workStatus": [
         "工作状态-思考冒泡",      // index 0 thinking（turn/start 回合开）
-        "工作状态-忙碌点按",      // index 1 working（tool/call 工具调用）
+        ["工作状态-忙碌点按", "托腮盘发"],  // index 1 working（tool/call 工具调用）：托腮盘发=长任务等待语义，档内随机轮换
         "工作状态-清点归档",      // index 2 result（tool/result 工具完成回整理）
-        "工作状态-原地踱步张望",  // index 3 waiting（approval/asked 等待批准）
+        ["工作状态-原地踱步张望", "合十拜托"],  // index 3 waiting（approval/asked 等待批准）：合十拜托=求拍板，档内随机轮换
         "工作状态-雀跃庆祝",      // index 4 success（turn/end completed 完成）
-        "工作状态-垂头叹气冒汗"   // index 5 error（turn/end error/max-tokens 出错/达上限）
+        ["工作状态-垂头叹气冒汗", "擦汗重试"]   // index 5 error（turn/end error/max-tokens 出错/达上限）：擦汗重试=软失败自救，档内随机轮换
       ]
     }
   },
